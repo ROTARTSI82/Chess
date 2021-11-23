@@ -352,6 +352,6 @@ Move RandomEngine::search(Board &b, bool side) {
     std::random_device dev;
     std::mt19937 rng(dev());
     std::uniform_int_distribution<std::mt19937::result_type> dist(0, moves.size() - 1); // distribution in range [1, 6]
-
-    return moves.at(dist(rng));
+    auto select = dist(rng);
+    return select >= 0 && select < moves.size() ? moves.at(select) : Move{};
 }

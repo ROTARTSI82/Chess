@@ -21,7 +21,8 @@ int main(int argc, char **argv) {
     Board board{};
     board.dbgPrint();
 
-    Engine *eng = new StockfishEngine();
+    Engine *whiteEngine = new DrawFishEngine();
+    Engine *blackEngine = new WorstFishEngine();
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
                                         SDL_WINDOWPOS_CENTERED,
@@ -98,7 +99,7 @@ int main(int argc, char **argv) {
 
                     board.make(mov);
 
-                    board.make(eng->search(board, BLACK_SIDE));
+                    board.make(blackEngine->search(board, BLACK_SIDE));
                 }
 
                 break;
@@ -109,7 +110,7 @@ int main(int argc, char **argv) {
                     std::cout << board.getFen() << std::endl;
                     break;
                 case SDLK_g:
-                    board.make(eng->search(board, turn));
+                    board.make((turn ? whiteEngine : blackEngine)->search(board, turn));
                     turn ^= true;
                     break;
                 }
@@ -150,6 +151,7 @@ int main(int argc, char **argv) {
     SDL_DestroyTexture(boardTex);
     SDL_DestroyRenderer(rend);
     SDL_DestroyWindow(win);
-    delete eng;
+    delete whiteEngine;
+    delete blackEngine;
     SDL_Quit();
 }
