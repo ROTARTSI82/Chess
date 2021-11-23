@@ -1,6 +1,1 @@
-[submodule "dep/cpp-subprocess"]
-	path = dep/cpp-subprocess
-	url = https://github.com/arun11299/cpp-subprocess
-[submodule "dep/cpp-subproc2"]
-	path = dep/cpp-subproc2
-	url = https://github.com/tsaarni/cpp-subprocess/
+
