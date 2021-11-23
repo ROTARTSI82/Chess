@@ -1,9 +1,6 @@
 #include "chess.hpp"
 
-// #include "subprocess.hpp"
-// using namespace subprocess;
-
-#include <cstdio>
+#include "popen2.hpp"
 
 class StockfishEngine : public Engine {
 public:
@@ -11,7 +8,6 @@ public:
     ~StockfishEngine() override;
     Move search(Board &b, bool sideIsWhite) override;
 
-    FILE *pipe;
-    // Popen proc;
+    struct popen2 proc;
 };
 
