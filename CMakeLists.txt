@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.7)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
-set (CMAKE_CXX_STANDARD 17)
+set (CMAKE_CXX_STANDARD 20)
 
 project(Chess)
 
 # add_subdirectory(dep/SDL)
 # add_subdirectory(dep/SDL_image)
-add_compile_options(-g3 -Og -fsanitize=address -fno-omit-frame-pointer)
-add_link_options(-g3 -Og -fsanitize=address -fno-omit-frame-pointer)
+add_compile_options(-g3 -Og -fsanitize=address -fno-omit-frame-pointer -std=c++20)
+add_link_options(-g3 -Og -fsanitize=address -fno-omit-frame-pointer -std=c++20)
 
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
@@ -15,7 +15,7 @@ find_package(SDL2_image REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
 include_directories(${SDL2_IMAGE_INCLUDE_DIR})
 
-add_executable(Chess src/main.cpp src/chess.cpp)
+add_executable(Chess src/main.cpp src/chess.cpp src/stockfish_engine.cpp)
 target_include_directories(Chess PUBLIC include src)
 target_link_libraries(Chess ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY} ${SDL2_IMAGE_LIBRARY})
 # target_include_directories(Chess PUBLIC dep/SDL/include dep/SDL_image)

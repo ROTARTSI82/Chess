@@ -7,6 +7,7 @@
 
 #include <chess.hpp>
 
+#include "stockfish_engine.hpp"
 
 int main(int argc, char **argv) {
     // retutns zero on success else non-zero
@@ -19,6 +20,8 @@ int main(int argc, char **argv) {
 
     Board board{};
     board.dbgPrint();
+
+    Engine *eng = new StockfishEngine();
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
                                         SDL_WINDOWPOS_CENTERED,
@@ -46,6 +49,7 @@ int main(int argc, char **argv) {
     bool running = true;
 
     bool isSelected = false;
+    bool turn = true;
     BoardPosition selected = {0, 0};
 
     std::vector<Move> undoMoves;
@@ -63,6 +67,8 @@ int main(int argc, char **argv) {
                 running = false;
                 break;
             case SDL_MOUSEBUTTONDOWN: {
+                if (!turn) break;
+
                 BoardPosition prev = selected;
                 isSelected ^= true;
 
@@ -92,17 +98,20 @@ int main(int argc, char **argv) {
 
                     board.make(mov);
 
-                    board.make(RandomEngine().search(board, BLACK_SIDE));
+                    board.make(eng->search(board, BLACK_SIDE));
                 }
 
                 break;
             }
             case SDL_KEYDOWN: {
                 switch (event.key.keysym.sym) {
-                case SDLK_BACKSPACE:
+                case SDLK_f:
+                    std::cout << board.getFen() << std::endl;
                     break;
-                    // board.unmake(undoCaps.back(), undoMoves.back());
-                    // undoMoves.pop_back(); undoCaps.pop_back();
+                case SDLK_g:
+                    board.make(eng->search(board, turn));
+                    turn ^= true;
+                    break;
                 }
             }
             }
@@ -141,5 +150,6 @@ int main(int argc, char **argv) {
     SDL_DestroyTexture(boardTex);
     SDL_DestroyRenderer(rend);
     SDL_DestroyWindow(win);
+    delete eng;
     SDL_Quit();
 }

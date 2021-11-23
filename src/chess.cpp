@@ -45,6 +45,40 @@ Board::~Board() {
     
 }
 
+std::string Board::getFen(bool sideWhite) {
+    std::string ret;
+    int emptySpaces = 0;
+    for (uint8_t r = 0; r < 8; r++) {
+        emptySpaces = 0;
+        for (uint8_t c = 0; c < 8; c++) {
+            if (!rget(r, c).exists())
+                emptySpaces++;
+            else {
+                if (emptySpaces > 0) {
+                    ret += std::to_string(emptySpaces);
+                    emptySpaces = 0;
+                }
+
+                ret += rget(r, c).fenChar();
+            }
+        }
+
+        if (emptySpaces > 0)
+            ret += std::to_string(emptySpaces);
+        ret += "/";
+    }
+
+    ret = ret.substr(0, ret.size() - 1);
+
+    // always black's turn from engine's perspective.
+    // no castling rights or en passant targets. Maybe these later?
+    // always 30 halfmoves and 30 fullmoves.
+    // hopefully hardcoding these don't screw the engine over.
+    ret += (sideWhite ? " w" : " b") + std::string(" - - 30 30");
+
+    return ret;
+}
+
 std::pair<Piece, MoveState> Board::make(Move mov) {
     Piece &dst = rget(mov.dstRow, mov.dstCol);
     Piece &src = rget(mov.srcRow, mov.srcCol);
@@ -144,7 +178,7 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret) {
         { 1, -2}, { 1, 2},
         {-1, -2}, {-1, 2}
     };
-    
+
     switch (rget(r, c).type) {
     case (PType::BISHOP):
     case (PType::ROOK):

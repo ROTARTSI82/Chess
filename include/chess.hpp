@@ -63,6 +63,21 @@ struct Piece {
         default: return ret + "?";
         }
     }
+
+    inline char fenChar() {
+        char c = 0;
+        switch (type) {
+        case PType::KING: c = 'K'; break;
+        case PType::QUEEN: c = 'Q'; break;
+        case PType::ROOK: c = 'R'; break;
+        case PType::BISHOP: c = 'B'; break;
+        case PType::KNIGHT: c = 'N'; break;
+        case PType::PAWN: c = 'P'; break;
+        default: return '?';
+        }
+
+        return c + (isWhite ? 0 : 32);
+    }
 };
 
 struct BoardPosition {
@@ -80,6 +95,7 @@ struct Move {
 
     Move(BoardPosition f, BoardPosition t);
     Move(uint8_t src, uint8_t dst);
+    Move() = default;
 };
 
 // problems: How do you undo "move states"?
@@ -98,6 +114,8 @@ public:
     }
 
     void dbgPrint();
+    
+    std::string getFen(bool sideWhite = false);
 
     void draw(SDL_Renderer *rend, int w, int h, SDL_Texture **font);
 
@@ -122,11 +140,13 @@ private:
 // to write an engine: inherit from this class and implement the search function!
 class Engine {
 public:
+    virtual ~Engine() = default;
     virtual Move search(Board &b, bool sideIsWhite) = 0;
 };
 
 class RandomEngine : public Engine {
 public:
+    ~RandomEngine() = default;
     Move search(Board &b, bool sideIsWhite) override;
 };
 
