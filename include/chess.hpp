@@ -111,6 +111,7 @@ public:
     }
 
     std::vector<Move> pseudoLegalMoves(bool doWhite);
+    void collectMovesFor(uint8_t row, uint8_t col, std::vector<Move> &store);
 
 private:
     // layout: 1 [a, b, c...] 2 [a, b, c...] 3 [a, b, c...]

@@ -40,6 +40,8 @@ int main(int argc, char **argv) {
         nullptr, tex("./wpawn.png"), tex("./wknight.png"), tex("./wbishop.png"), tex("./wrook.png"), tex("./wqueen.png"), tex("./wking.png")
     };
 
+    SDL_Texture *selectTex = tex("./select.png");
+
     // controls annimation loop
     bool running = true;
 
@@ -69,8 +71,28 @@ int main(int argc, char **argv) {
                 // std::cout << "Selected " << (int) selected.col << ", " << (int) selected.row << std::endl;
 
                 if (!isSelected) { // make the move
-                    undoMoves.emplace_back(Move{{prev.row, prev.col}, {selected.row, selected.col}});
-                    undoCaps.push_back(board.make(undoMoves.back()));
+                    auto legalMoves = std::vector<Move>();
+                    board.collectMovesFor(prev.row, prev.col, legalMoves);
+
+                    bool found = false;
+                    for (const auto m : legalMoves)
+                        found |= (m.dstCol == selected.col && m.dstRow == selected.row);
+
+                    if (!found || board.rget(prev.row, prev.col).isWhite == false) {
+                        std::cout << "Illegal move you idiot" << std::endl;
+                        break;
+                    }
+
+                    Move mov = Move{{prev.row, prev.col}, {selected.row, selected.col}};
+                    if (board.rget(prev.row, prev.col).type == PType::PAWN 
+                        && (selected.row == 0 || selected.row == 7)) {
+                        mov.doPromote = true;
+                        mov.promoteTo = PromoteType::QUEEN; // always promote to queen :/
+                    }
+
+                    board.make(mov);
+
+                    board.make(RandomEngine().search(board, BLACK_SIDE));
                 }
 
                 break;
@@ -78,8 +100,9 @@ int main(int argc, char **argv) {
             case SDL_KEYDOWN: {
                 switch (event.key.keysym.sym) {
                 case SDLK_BACKSPACE:
-                    board.unmake(undoCaps.back(), undoMoves.back());
-                    undoMoves.pop_back(); undoCaps.pop_back();
+                    break;
+                    // board.unmake(undoCaps.back(), undoMoves.back());
+                    // undoMoves.pop_back(); undoCaps.pop_back();
                 }
             }
             }
@@ -90,10 +113,19 @@ int main(int argc, char **argv) {
         SDL_RenderCopy(rend, boardTex, NULL, NULL);
         board.draw(rend, w, h, font);
 
-        std::vector<Move> moves = board.pseudoLegalMoves(WHITE_SIDE);
-        for (const auto i : moves) {
-            // if (board.rget(i.srcRow, i.srcCol).type == PType::KING)
-            SDL_RenderDrawLine(rend, i.srcCol * w/8 + w/16, i.srcRow * w/8 + w/16, i.dstCol * w/8 + w/16, i.dstRow * w/8 + w/16);
+        // std::vector<Move> moves = board.pseudoLegalMoves(WHITE_SIDE);
+        // for (const auto i : moves) {
+        //     // if (board.rget(i.srcRow, i.srcCol).type == PType::KING)
+        //     SDL_RenderDrawLine(rend, i.srcCol * w/8 + w/16, i.srcRow * w/8 + w/16, i.dstCol * w/8 + w/16, i.dstRow * w/8 + w/16);
+        // }
+
+        if (isSelected) {
+            SDL_Rect dstRect;
+            dstRect.x = w * selected.col / 8;
+            dstRect.y = h * selected.row / 8;
+            dstRect.w = w / 8;
+            dstRect.h = h / 8;
+            SDL_RenderCopy(rend, selectTex, NULL, &dstRect);
         }
 
 

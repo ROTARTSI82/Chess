@@ -129,9 +129,7 @@ void Board::unmake(std::pair<Piece, MoveState> capInfo, Move mov) {
     }
 }
 
-std::vector<Move> Board::pseudoLegalMoves(bool doWhite) {
-    std::vector<Move> ret;
-
+void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret) {
     // too lazy to properly do these programatically so i'm hardcoding them!
     constexpr static int8_t dirs[8][2] = {
         {0, 1}, {0, -1}, // up, down
@@ -146,126 +144,132 @@ std::vector<Move> Board::pseudoLegalMoves(bool doWhite) {
         { 1, -2}, { 1, 2},
         {-1, -2}, {-1, 2}
     };
+    
+    switch (rget(r, c).type) {
+    case (PType::BISHOP):
+    case (PType::ROOK):
+    case (PType::QUEEN):
+    {
+        uint8_t start = rget(r, c).type == PType::BISHOP ? 4 : 0;
+        uint8_t end = rget(r, c).type == PType::ROOK ? 4 : 8;
+
+        for (int dir = start; dir < end; dir++) {
+            uint8_t cRow = r + dirs[dir][1];
+            uint8_t cCol = c + dirs[dir][0];
+            while (cRow >= 0 && cRow < 8 && cCol >= 0 && cCol < 8) {
+                ret.emplace_back(Move({r, c}, {cRow, cCol}));
+                if (rget(cRow, cCol).exists()) break; // do not check for same or opposite color: allow self-captures!
+                cRow += dirs[dir][1];
+                cCol += dirs[dir][0];
+            }
+        }
+        break;
+    }
+
+    case (PType::PAWN): {
+        int8_t lookDir = rget(r, c).isWhite ? -1 : 1;
+        uint8_t lRow = r + lookDir;
+
+        // no bounds checking because pawns should never hug the boundary
+        if (!rget(lRow, c).exists()) {
+            Move mov = Move{{r, c}, {lRow, c}};
+            if (lRow == 0 || lRow == 7) {
+                // checks for promoting to both queen and knight
+                mov.doPromote = true;
+                mov.promoteTo = PromoteType::QUEEN;
+                ret.push_back(mov);
+                mov.promoteTo = PromoteType::KNIGHT;
+            } else if (rget(r,c).moveState == MoveState::NOT_MOVED && 
+                        !rget(r + 2*lookDir, c).exists()) {
+                // no need to check for promotion when NOT_MOVED
+                ret.emplace_back(Move{{r, c}, {static_cast<uint8_t>(r + 2*lookDir), c}});
+            }
+
+            ret.push_back(mov);
+        }
+
+        if (c + 1 < 8) {
+            if (rget(lRow, c + 1).exists()) {
+                Move mov = Move{{r, c}, {lRow, (uint8_t) (c + 1)}};
+                if (lRow == 0 || lRow == 7) { 
+                    mov.doPromote = true; 
+                    mov.promoteTo = PromoteType::QUEEN;
+                    ret.push_back(mov);
+                    mov.promoteTo = PromoteType::KNIGHT;
+                }
+                ret.push_back(mov);
+            }
+
+            auto sqaure = rget(r, c + 1);
+            if (sqaure.type == PType::PAWN && sqaure.moveState == MoveState::AFTER_DOUBLE) {
+                ret.emplace_back(Move{{r, c}, {lRow, static_cast<uint8_t>(c + 1)}});
+            }
+        }
+        if (c - 1 >= 0){ 
+            if (rget(lRow, c - 1).exists()) {
+                Move mov = Move{{r, c}, {lRow, (uint8_t) (c - 1)}};
+                if (lRow == 0 || lRow == 7) { 
+                    mov.doPromote = true; 
+                    mov.promoteTo = PromoteType::QUEEN;
+                    ret.push_back(mov);
+                    mov.promoteTo = PromoteType::KNIGHT;
+                }
+                ret.push_back(mov);
+            }
+
+            auto sqaure = rget(r, c - 1);
+            if (sqaure.type == PType::PAWN && sqaure.moveState == MoveState::AFTER_DOUBLE) {
+                ret.emplace_back(Move{{r, c}, {lRow, static_cast<uint8_t>(c - 1)}});
+            }
+        }
+        break;
+    }
+    case (PType::KNIGHT): {
+        for (const int8_t *d : knightMoves) {
+            if (r+d[1] >= 0 && r+d[1] < 8 && c+d[0] >= 0 && c+d[0] < 8) {
+                ret.emplace_back(Move{{r, c}, {static_cast<uint8_t>(r+d[1]), 
+                                    static_cast<uint8_t>(c+d[0])}});
+            }
+        }
+        break;
+    }
+
+    case (PType::KING): {
+        for (const int8_t *dir : dirs) {
+            if (r+dir[1] >= 0 && r+dir[1] < 8 && c+dir[0] >= 0 && c+dir[0] < 8)
+                ret.emplace_back(Move{{r, c}, {static_cast<uint8_t>(r + dir[1]), 
+                                static_cast<uint8_t>(c + dir[0])}});
+        }
+
+        // castling
+        if (rget(r, c).moveState == MoveState::NOT_MOVED) {
+            // kingside
+            if (rget(r, 7).type == PType::ROOK && rget(r, 7).moveState == MoveState::NOT_MOVED) {
+                bool blocked = false;
+                for (uint8_t scan = c + 1; scan < 7; scan++) blocked |= rget(r, scan).exists();
+                if (!blocked) ret.emplace_back(Move{{r, c}, {r, 6}});
+            }
+
+            // queenside
+            if (rget(r, 0).type == PType::ROOK && rget(r, 0).moveState == MoveState::NOT_MOVED) {
+                bool blocked = false;
+                for (uint8_t scan = 1; scan < c; scan++) blocked |= rget(r, scan).exists();
+                if (!blocked) ret.emplace_back(Move{{r, c}, {r, 2}});
+            }
+        }
+        break;
+    }
+    
+    }
+}
+
+std::vector<Move> Board::pseudoLegalMoves(bool doWhite) {
+    std::vector<Move> ret;
 
     // Checks/checkmates? Also, this algo searches entire board. Maybe keep list of pieces for each side?
     for (uint8_t r = 0; r < 8; r++) { for (uint8_t c = 0; c < 8; c++) {
         if (rget(r, c).exists() && rget(r, c).isWhite == doWhite) {
-            switch (rget(r, c).type) {
-            case (PType::BISHOP):
-            case (PType::ROOK):
-            case (PType::QUEEN):
-            {
-                uint8_t start = rget(r, c).type == PType::BISHOP ? 4 : 0;
-                uint8_t end = rget(r, c).type == PType::ROOK ? 4 : 8;
-
-                for (int dir = start; dir < end; dir++) {
-                    uint8_t cRow = r + dirs[dir][1];
-                    uint8_t cCol = c + dirs[dir][0];
-                    while (cRow >= 0 && cRow < 8 && cCol >= 0 && cCol < 8) {
-                        ret.emplace_back(Move({r, c}, {cRow, cCol}));
-                        if (rget(cRow, cCol).exists()) break; // do not check for same or opposite color: allow self-captures!
-                        cRow += dirs[dir][1];
-                        cCol += dirs[dir][0];
-                    }
-                }
-                break;
-            }
-
-            case (PType::PAWN): {
-                int8_t lookDir = rget(r, c).isWhite ? -1 : 1;
-                uint8_t lRow = r + lookDir;
-
-                // no bounds checking because pawns should never hug the boundary
-                if (!rget(lRow, c).exists()) {
-                    Move mov = Move{{r, c}, {lRow, c}};
-                    if (lRow == 0 || lRow == 7) {
-                        // checks for promoting to both queen and knight
-                        mov.doPromote = true;
-                        mov.promoteTo = PromoteType::QUEEN;
-                        ret.push_back(mov);
-                        mov.promoteTo = PromoteType::KNIGHT;
-                    } else if (rget(r,c).moveState == MoveState::NOT_MOVED && 
-                              !rget(r + 2*lookDir, c).exists()) {
-                        // no need to check for promotion when NOT_MOVED
-                        ret.emplace_back(Move{{r, c}, {static_cast<uint8_t>(r + 2*lookDir), c}});
-                    }
-
-                    ret.push_back(mov);
-                }
-
-                if (c + 1 < 8) {
-                    if (rget(lRow, c + 1).exists()) {
-                        Move mov = Move{{r, c}, {lRow, (uint8_t) (c + 1)}};
-                        if (lRow == 0 || lRow == 7) { 
-                            mov.doPromote = true; 
-                            mov.promoteTo = PromoteType::QUEEN;
-                            ret.push_back(mov);
-                            mov.promoteTo = PromoteType::KNIGHT;
-                        }
-                        ret.push_back(mov);
-                    }
-
-                    auto sqaure = rget(r, c + 1);
-                    if (sqaure.type == PType::PAWN && sqaure.moveState == MoveState::AFTER_DOUBLE) {
-                        ret.emplace_back(Move{{r, c}, {lRow, static_cast<uint8_t>(c + 1)}});
-                    }
-                }
-                if (c - 1 >= 0){ 
-                    if (rget(lRow, c - 1).exists()) {
-                        Move mov = Move{{r, c}, {lRow, (uint8_t) (c - 1)}};
-                        if (lRow == 0 || lRow == 7) { 
-                            mov.doPromote = true; 
-                            mov.promoteTo = PromoteType::QUEEN;
-                            ret.push_back(mov);
-                            mov.promoteTo = PromoteType::KNIGHT;
-                        }
-                        ret.push_back(mov);
-                    }
-
-                    auto sqaure = rget(r, c - 1);
-                    if (sqaure.type == PType::PAWN && sqaure.moveState == MoveState::AFTER_DOUBLE) {
-                        ret.emplace_back(Move{{r, c}, {lRow, static_cast<uint8_t>(c - 1)}});
-                    }
-                }
-                break;
-            }
-            case (PType::KNIGHT): {
-                for (const int8_t *d : knightMoves) {
-                    if (r+d[1] >= 0 && r+d[1] < 8 && c+d[0] >= 0 && c+d[0] < 8) {
-                        ret.emplace_back(Move{{r, c}, {static_cast<uint8_t>(r+d[1]), 
-                                         static_cast<uint8_t>(c+d[0])}});
-                    }
-                }
-                break;
-            }
-
-            case (PType::KING): {
-                for (const int8_t *dir : dirs) {
-                    if (r+dir[1] >= 0 && r+dir[1] < 8 && c+dir[0] >= 0 && c+dir[0] < 8)
-                        ret.emplace_back(Move{{r, c}, {static_cast<uint8_t>(r + dir[1]), 
-                                        static_cast<uint8_t>(c + dir[0])}});
-                }
-
-                // castling
-                if (rget(r, c).moveState == MoveState::NOT_MOVED) {
-                    // kingside
-                    if (rget(r, 7).type == PType::ROOK && rget(r, 7).moveState == MoveState::NOT_MOVED) {
-                        bool blocked = false;
-                        for (uint8_t scan = c + 1; scan < 7; scan++) blocked |= rget(r, scan).exists();
-                        if (!blocked) ret.emplace_back(Move{{r, c}, {r, 6}});
-                    }
-
-                    // queenside
-                    if (rget(r, 0).type == PType::ROOK && rget(r, 0).moveState == MoveState::NOT_MOVED) {
-                        bool blocked = false;
-                        for (uint8_t scan = 1; scan < c; scan++) blocked |= rget(r, scan).exists();
-                        if (!blocked) ret.emplace_back(Move{{r, c}, {r, 2}});
-                    }
-                }
-                break;
-            }
-            
-            }
+            collectMovesFor(r, c, ret);
         }
     }}
 
