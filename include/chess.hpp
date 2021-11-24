@@ -3,6 +3,8 @@
 #include <cstdint>
 
 #include <vector>
+#include <random>
+#include <unordered_set>
 #include <iostream>
 #include <string>
 #include <tuple>
@@ -25,16 +27,16 @@ enum class MoveState : uint8_t {
     MOVED = 2
 };
 
-inline uint8_t valueOf(PType piece) {
+inline double valueOf(PType piece) {
     switch (piece) {
-    case PType::PAWN: return 1;
+    case PType::PAWN: return 100;
     case PType::KNIGHT:
     case PType::BISHOP:
-        return 3;
-    case PType::ROOK: return 5;
-    case PType::QUEEN: return 9;
-    default:
-        return -1;
+        return 300;
+    case PType::ROOK: return 500;
+    case PType::QUEEN: return 900;
+    case PType::KING:
+        return 9001 * 100; // over nine thousand
     }
 }
 
@@ -83,7 +85,26 @@ struct Piece {
 struct BoardPosition {
     uint8_t row : 3;
     uint8_t col : 3;
+
+    BoardPosition(int r, int c) : row(r), col(c) {}
+
+    inline static BoardPosition fromRankFile(char file, uint8_t rank) {
+        return BoardPosition{static_cast<uint8_t>(8 - rank), static_cast<uint8_t>(file - 'a')};
+    }
+
+    inline std::string toString() const { return std::to_string(row) + ", " + std::to_string(col); }
+
+    inline bool operator==(const BoardPosition rhs) const { return row == rhs.row && col == rhs.col; }
 };
+
+namespace std {
+  template <>
+  struct hash<BoardPosition> {
+    std::size_t operator()(const BoardPosition k) const {
+      return (static_cast<std::size_t>(k.row) << 3) | static_cast<std::size_t>(k.col);
+    }
+  };
+}
 
 struct Move {
     uint8_t srcRow : 3;
@@ -101,8 +122,17 @@ struct Move {
 // problems: How do you undo "move states"?
 class Board {
 public:
+    std::unordered_set<BoardPosition> blackPieces;
+    std::unordered_set<BoardPosition> whitePieces;
+
+    static void initZobrist();
+
     Board();
     ~Board();
+
+    inline Piece &at(BoardPosition p) {
+        return rget(p.row, p.col);
+    }
 
     // example: get('e', 4) will do exactly what you expect
     inline Piece &get(char file, uint8_t rank) {
@@ -119,21 +149,41 @@ public:
 
     void draw(SDL_Renderer *rend, int w, int h, SDL_Texture **font);
 
+    inline uint64_t hash() {
+        uint64_t ret = 0;
+        for (const BoardPosition b : blackPieces)
+            ret ^= zobristTable[std::hash<BoardPosition>()(b)][5 + static_cast<uint64_t>(at(b).type)];
+
+        for (const BoardPosition b : whitePieces)
+            ret ^= zobristTable[std::hash<BoardPosition>()(b)][static_cast<uint64_t>(at(b).type) - 1];
+        return ret;
+    }
+
     // precondition: Moves are legal!
     std::pair<Piece, MoveState> make(Move mov); // Returns captured piece + previous state of piece moved
     void unmake(std::pair<Piece, MoveState> capInfo, Move mov); // undos a Board::make()
 
-    inline void capture(Piece &which) {
-        // std::cout << "Captured " << which.toString() << std::endl;
-        which = Piece();
-    }
+    std::vector<Move> pseudoLegalMoves(bool doWhite, bool OnlyOpposingCaps = false);
 
-    std::vector<Move> pseudoLegalMoves(bool doWhite);
-    void collectMovesFor(uint8_t row, uint8_t col, std::vector<Move> &store);
+    void collectMovesFor(uint8_t row, uint8_t col, std::vector<Move> &store, bool OnlyOpposingCaps = false);
 
 private:
+    static uint64_t zobristTable[64][12];
+
     // layout: 1 [a, b, c...] 2 [a, b, c...] 3 [a, b, c...]
     Piece board[64];
+
+    inline void singularMov(BoardPosition src, BoardPosition dst, bool side) {
+        auto &which = (side ? whitePieces : blackPieces);
+        which.erase(src);
+        which.emplace(dst);
+        at(dst) = at(src);
+    }
+
+    inline void capture(BoardPosition pos) {
+        (at(pos).isWhite ? whitePieces : blackPieces).erase(pos);
+        at(pos) = Piece();
+    }
 };
 
 
@@ -148,5 +198,9 @@ class RandomEngine : public Engine {
 public:
     ~RandomEngine() = default;
     Move search(Board &b, bool sideIsWhite) override;
+
+private:
+    std::random_device dev;
+    std::mt19937 rng = std::mt19937(dev());
 };
 

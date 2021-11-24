@@ -8,6 +8,7 @@
 
 #include <poll.h>
 #include <fcntl.h>
+#include <sys/wait.h>
 
 AbstractStockfishEngine::AbstractStockfishEngine() {
     popen2("stockfish", &proc);
@@ -93,7 +94,7 @@ WorstFishEngine::WorstFishEngine() : AbstractStockfishEngine() {
 
 void WorstFishEngine::resetSearch(Board &b, bool isSideWhite) {
     cachedBoard = &b;
-    worstScore = 999;
+    worstScore = 999999;
 }
 
 bool WorstFishEngine::lineReceived(const std::string &line, Move &mov) {

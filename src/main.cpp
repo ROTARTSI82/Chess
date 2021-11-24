@@ -8,8 +8,11 @@
 #include <chess.hpp>
 
 #include "stockfish_engine.hpp"
+#include "engine.hpp"
 
 int main(int argc, char **argv) {
+    Board::initZobrist();
+
     // retutns zero on success else non-zero
     if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
         std::cerr << "error initializing SDL: " << SDL_GetError() << std::endl;
@@ -21,8 +24,8 @@ int main(int argc, char **argv) {
     Board board{};
     board.dbgPrint();
 
-    Engine *whiteEngine = new DrawFishEngine();
-    Engine *blackEngine = new WorstFishEngine();
+    Engine *whiteEngine = new MyEngine();
+    Engine *blackEngine = new MyEngine();
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
                                         SDL_WINDOWPOS_CENTERED,
@@ -40,8 +43,8 @@ int main(int argc, char **argv) {
 
     SDL_Texture *boardTex = tex("./board.png");
     SDL_Texture *font[] = {
-        nullptr, tex("./bpawn.png"), tex("./bknight.png"), tex("./bbishop.png"), tex("./brook.png"), tex("./bqueen.png"), tex("./bking.png"),
-        nullptr, tex("./wpawn.png"), tex("./wknight.png"), tex("./wbishop.png"), tex("./wrook.png"), tex("./wqueen.png"), tex("./wking.png")
+        tex("./select.png"), tex("./bpawn.png"), tex("./bknight.png"), tex("./bbishop.png"), tex("./brook.png"), tex("./bqueen.png"), tex("./bking.png"),
+        tex("./select.png"), tex("./wpawn.png"), tex("./wknight.png"), tex("./wbishop.png"), tex("./wrook.png"), tex("./wqueen.png"), tex("./wking.png")
     };
 
     SDL_Texture *selectTex = tex("./select.png");
@@ -68,8 +71,7 @@ int main(int argc, char **argv) {
                 running = false;
                 break;
             case SDL_MOUSEBUTTONDOWN: {
-                if (!turn) break;
-
+                // if (!turn) break;
                 BoardPosition prev = selected;
                 isSelected ^= true;
 
@@ -97,9 +99,12 @@ int main(int argc, char **argv) {
                         mov.promoteTo = PromoteType::QUEEN; // always promote to queen :/
                     }
 
-                    board.make(mov);
+                    undoCaps.push_back(board.make(mov));
+                    undoMoves.push_back(mov);
 
-                    board.make(blackEngine->search(board, BLACK_SIDE));
+                    mov = blackEngine->search(board, BLACK_SIDE);
+                    undoCaps.push_back(board.make(mov));
+                    undoMoves.push_back(mov);
                 }
 
                 break;
@@ -109,10 +114,21 @@ int main(int argc, char **argv) {
                 case SDLK_f:
                     std::cout << board.getFen() << std::endl;
                     break;
-                case SDLK_g:
-                    board.make((turn ? whiteEngine : blackEngine)->search(board, turn));
+                case SDLK_g: {
+                    turn = false;
+                    auto mov = (turn ? whiteEngine : blackEngine)->search(board, turn);
+                    undoCaps.push_back(board.make(mov));
+                    undoMoves.push_back(mov);
                     turn ^= true;
                     break;
+                }
+                case SDLK_BACKSPACE:
+                    board.unmake(undoCaps.back(), undoMoves.back());
+                    undoCaps.pop_back(); undoMoves.pop_back();
+                    break;
+                case SDLK_s:
+                    std::cout << "Black eval: " << defaultEvaluator(board, false) << std::endl;
+                    std::cout << "White eval: " << defaultEvaluator(board, true) << std::endl;
                 }
             }
             }
@@ -123,11 +139,11 @@ int main(int argc, char **argv) {
         SDL_RenderCopy(rend, boardTex, NULL, NULL);
         board.draw(rend, w, h, font);
 
-        // std::vector<Move> moves = board.pseudoLegalMoves(WHITE_SIDE);
-        // for (const auto i : moves) {
-        //     // if (board.rget(i.srcRow, i.srcCol).type == PType::KING)
-        //     SDL_RenderDrawLine(rend, i.srcCol * w/8 + w/16, i.srcRow * w/8 + w/16, i.dstCol * w/8 + w/16, i.dstRow * w/8 + w/16);
-        // }
+        std::vector<Move> moves = board.pseudoLegalMoves(WHITE_SIDE, true);
+        for (const auto i : moves) {
+            // if (board.rget(i.srcRow, i.srcCol).type == PType::KING)
+            SDL_RenderDrawLine(rend, i.srcCol * w/8 + w/16, i.srcRow * w/8 + w/16, i.dstCol * w/8 + w/16, i.dstRow * w/8 + w/16);
+        }
 
         if (isSelected) {
             SDL_Rect dstRect;
