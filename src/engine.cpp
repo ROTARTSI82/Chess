@@ -32,7 +32,10 @@ double MyEngine::scoreOf(double alpha, double beta) {
     if (transpositionTable.contains(hash))
         return transpositionTable[hash] * (isWhite ? 1 : -1);
 
-    for (const Move mov : b->pseudoLegalMoves(isWhite)) {
+    auto moves = b->pseudoLegalMoves(isWhite);
+    if (moves.empty()) return -std::numeric_limits<double>::infinity();
+
+    for (const Move mov : moves) {
         auto undoInfo = b->make(mov);
 
         isWhite ^= true;
@@ -51,20 +54,23 @@ double MyEngine::scoreOf(double alpha, double beta) {
 
         if (moveScore > alpha) {
             alpha = moveScore;
-            transpositionTable[b->hash()] = moveScore * (isWhite ? 1 : -1);
         }
     }
     // std::cout << "Depth " << depth << " score " << max << std::endl;
 
-    // transpositionTable[hash] = max;
+    transpositionTable[hash] = alpha * (isWhite ? 1 : -1);
     return alpha;
 }
 
 
 Move MyEngine::search(Board &bor, bool sideIsWhite) {
+    transpositionTable.clear();
+
     Move selected{};
-    double max = -9999999999999999;
-    for (const Move mov : bor.pseudoLegalMoves(sideIsWhite)) {
+    double max = -std::numeric_limits<double>::infinity();
+    auto moves = bor.pseudoLegalMoves(sideIsWhite);
+
+    for (const Move mov : moves) {
         auto undoInfo = bor.make(mov);
 
         b = &bor;
@@ -80,7 +86,6 @@ Move MyEngine::search(Board &bor, bool sideIsWhite) {
         bor.unmake(undoInfo, mov);
     }
 
-    transpositionTable[bor.hash()] = max;
     std::cout << "SELECTED " << std::to_string(selected.srcRow) << 
         std::to_string(selected.srcCol) << std::to_string(selected.dstRow) << std::to_string(selected.dstCol) << std::endl;
     std::cout << transpositionTable.size() << " items cached. Current score of " << max << std::endl;

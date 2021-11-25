@@ -114,6 +114,8 @@ struct Move {
     uint8_t dstCol : 3;
     bool doPromote : 1;
 
+    uint8_t rank = 0;
+
     Move(BoardPosition f, BoardPosition t);
     Move(uint8_t src, uint8_t dst);
     Move() = default;
