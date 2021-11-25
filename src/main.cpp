@@ -131,6 +131,10 @@ int main(int argc, char **argv) {
                 case SDLK_s:
                     std::cout << "Black eval: " << defaultEvaluator(board, false) << std::endl;
                     std::cout << "White eval: " << defaultEvaluator(board, true) << std::endl;
+                    break;
+                case SDLK_h:
+                    std::cout << "Zobrist hash = " << board.hash() << std::endl;
+                    break;
                 }
             }
             }

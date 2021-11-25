@@ -47,6 +47,13 @@ Board::Board() {
     get('f', 8) = Piece(PType::BISHOP, false);
     get('g', 8) = Piece(PType::KNIGHT, false);
     get('h', 8) = Piece(PType::ROOK, false);
+
+    runningHash = 0;
+    for (const BoardPosition b : blackPieces)
+        runningHash ^= zobristTable[std::hash<BoardPosition>()(b)][5 + static_cast<uint64_t>(at(b).type)];
+
+    for (const BoardPosition b : whitePieces)
+        runningHash ^= zobristTable[std::hash<BoardPosition>()(b)][static_cast<uint64_t>(at(b).type) - 1];
 }
 
 Board::~Board() {
@@ -150,14 +157,18 @@ void Board::unmake(std::pair<Piece, MoveState> capInfo, Move mov) {
         if (!capInfo.first.isPassant) {
             capInfo.first.isPassant = false;
             dst = capInfo.first;
-            (capInfo.first.isWhite ? whitePieces : blackPieces)
-                .emplace(BoardPosition{mov.dstRow, mov.dstCol});
+
+            auto pos = BoardPosition{mov.dstRow, mov.dstCol};
+            (capInfo.first.isWhite ? whitePieces : blackPieces).emplace(pos);
+            hashUpdate(pos, capInfo.first);
         } else {
             // en passant
             capInfo.first.isPassant = false;
-            rget(mov.srcRow, mov.dstCol) = capInfo.first;
-            (capInfo.first.isWhite ? whitePieces : blackPieces)
-                .emplace(BoardPosition{mov.srcRow, mov.dstCol});
+
+            auto pos = BoardPosition{mov.srcRow, mov.dstCol};
+            at(pos) = capInfo.first;
+            (capInfo.first.isWhite ? whitePieces : blackPieces).emplace(pos);
+            hashUpdate(pos, capInfo.first);
         }
     }
 
@@ -342,6 +353,8 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
         }
         break;
     }
+
+    default: break;
     
     }
 }

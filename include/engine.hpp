@@ -5,12 +5,12 @@
 
 double defaultEvaluator(Board &b, bool side);
 
-class MyEngine : public Engine {
+class Searcher {
 public:
-    ~MyEngine() = default;
-    Move search(Board &b, bool sideIsWhite) override;
+    
 
-private:
+
+public:
     Board *b;
     bool isWhite;
     int depth;
@@ -19,6 +19,16 @@ private:
     // the call stack from growing excessively.
     double scoreOf(double alpha, double beta);
 
-    std::unordered_map<uint64_t, double> transpositionTable;
+    std::unordered_map<uint64_t, double> *transpositionTable;
+    std::mutex *tableMtx;
+};
+
+class MyEngine : public Engine {
+public:
+    ~MyEngine() = default;
+    Move search(Board &b, bool sideIsWhite) override;
+
+private:
+
     // std::unordered_map<uint64_t, double> whiteTable;
 };

@@ -37,6 +37,7 @@ inline double valueOf(PType piece) {
     case PType::QUEEN: return 900;
     case PType::KING:
         return 9001 * 100; // over nine thousand
+    default: return 0;
     }
 }
 
@@ -152,13 +153,7 @@ public:
     void draw(SDL_Renderer *rend, int w, int h, SDL_Texture **font);
 
     inline uint64_t hash() {
-        uint64_t ret = 0;
-        for (const BoardPosition b : blackPieces)
-            ret ^= zobristTable[std::hash<BoardPosition>()(b)][5 + static_cast<uint64_t>(at(b).type)];
-
-        for (const BoardPosition b : whitePieces)
-            ret ^= zobristTable[std::hash<BoardPosition>()(b)][static_cast<uint64_t>(at(b).type) - 1];
-        return ret;
+        return runningHash;
     }
 
     // precondition: Moves are legal!
@@ -170,6 +165,7 @@ public:
     void collectMovesFor(uint8_t row, uint8_t col, std::vector<Move> &store, bool ONLY_CAP = false);
 
 private:
+    uint64_t runningHash = 0;
     static uint64_t zobristTable[64][12];
 
     // layout: 1 [a, b, c...] 2 [a, b, c...] 3 [a, b, c...]
@@ -179,12 +175,20 @@ private:
         auto &which = (side ? whitePieces : blackPieces);
         which.erase(src);
         which.emplace(dst);
+
+        hashUpdate(src, at(src));
+        hashUpdate(dst, at(src));
         at(dst) = at(src);
     }
 
     inline void capture(BoardPosition pos) {
+        hashUpdate(pos, at(pos));
         (at(pos).isWhite ? whitePieces : blackPieces).erase(pos);
         at(pos) = Piece();
+    }
+
+    inline void hashUpdate(BoardPosition p, Piece pi) {
+        runningHash ^= zobristTable[std::hash<BoardPosition>()(p)][(int) pi.type + (pi.isWhite ? -1 : 5)];
     }
 };
 
