@@ -3,7 +3,7 @@
 // return the absolute value lost by this threat. 
 // there can be multiple threats on a single piece!
 static inline double valueLost(double attacked, double attacker) {
-    return attacked * 0.125;
+    return attacked * 0.15;
 }
 
 double defaultEvaluator(Board &b, bool side) {
@@ -75,7 +75,7 @@ Move MyEngine::search(Board &bor, bool sideIsWhite) {
 
         b = &bor;
         isWhite = sideIsWhite ^ true;
-        depth = 3;
+        depth = 6;
         double moveScore = -scoreOf(-std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity());
 
         if (moveScore > max) {

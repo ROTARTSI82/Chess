@@ -176,7 +176,7 @@ void Board::unmake(std::pair<Piece, MoveState> capInfo, Move mov) {
     }
 }
 
-void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool OnlyOpposingCaps) {
+void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool ONLY_CAP) {
     // too lazy to properly do these programatically so i'm hardcoding them!
     constexpr static int8_t dirs[8][2] = {
         {0, 1}, {0, -1}, // up, down
@@ -204,11 +204,14 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
             uint8_t cRow = r + dirs[dir][1];
             uint8_t cCol = c + dirs[dir][0];
             while (cRow >= 0 && cRow < 8 && cCol >= 0 && cCol < 8) {
-                Move considering = Move({r, c}, {cRow, cCol});
-                considering.rank = rget(cRow, cCol).exists() * 10 + (rget(cRow, cCol).type >= rget(r,c).type) * 30;
-                if (!OnlyOpposingCaps || (rget(cRow, cCol).exists() && 
-                                          rget(cRow, cCol).isWhite != rget(r,c).isWhite))
+                if (rget(cRow, cCol).exists() && rget(cRow, cCol).isWhite == rget(r,c).isWhite) break;
+
+                // skip adding non-captures in ONLY_CAP
+                if (!ONLY_CAP || rget(cRow, cCol).exists()) {
+                    Move considering = Move({r, c}, {cRow, cCol});
+                    considering.rank = rget(cRow, cCol).exists() * 10 + (rget(cRow, cCol).type >= rget(r,c).type) * 30;
                     ret.emplace_back(considering);
+                }
                 
                 // do not check for same or opposite color: allow self-captures!
                 if (rget(cRow, cCol).exists()) break;
@@ -224,7 +227,7 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
         uint8_t lRow = r + lookDir;
 
         // no bounds checking because pawns should never hug the boundary
-        if (!rget(lRow, c).exists() && !OnlyOpposingCaps) {
+        if (!rget(lRow, c).exists() && !ONLY_CAP) {
             Move mov = Move{{r, c}, {lRow, c}};
             if (lRow == 0 || lRow == 7) {
                 // checks for promoting to both queen and knight
@@ -244,8 +247,7 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
         }
 
         if (c + 1 < 8) {
-            if (rget(lRow, c + 1).exists() 
-                && (!OnlyOpposingCaps || rget(lRow, c+1).isWhite != rget(r, c).isWhite)) {
+            if (rget(lRow, c + 1).exists() && rget(lRow, c + 1).isWhite != rget(r,c).isWhite) {
                 Move mov = Move{{r, c}, {lRow, (uint8_t) (c + 1)}};
                 mov.rank = 220;
                 if (lRow == 0 || lRow == 7) { 
@@ -262,15 +264,14 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
             // en passant, no possibility of promotion.
             auto square = rget(r, c + 1);
             if (square.type == PType::PAWN && square.moveState == MoveState::AFTER_DOUBLE
-                && (!OnlyOpposingCaps || square.isWhite != rget(r, c).isWhite)) {
+                 && square.isWhite != rget(r,c).isWhite) {
                 auto consider = Move{{r, c}, {lRow, static_cast<uint8_t>(c + 1)}};
                 consider.rank = 200;
                 ret.emplace_back(consider);
             }
         }
         if (c - 1 >= 0){ 
-            if (rget(lRow, c - 1).exists()
-                && (!OnlyOpposingCaps || rget(lRow, c-1).isWhite != rget(r, c).isWhite)) {
+            if (rget(lRow, c - 1).exists() && rget(lRow, c - 1).isWhite != rget(r,c).isWhite) {
                 Move mov = Move{{r, c}, {lRow, (uint8_t) (c - 1)}};
                 mov.rank = 220;
                 if (lRow == 0 || lRow == 7) { 
@@ -286,7 +287,7 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
 
             auto square = rget(r, c - 1);
             if (square.type == PType::PAWN && square.moveState == MoveState::AFTER_DOUBLE
-                && (!OnlyOpposingCaps || square.isWhite != rget(r, c).isWhite)) {
+                    && square.isWhite != rget(r,c).isWhite) {
                 auto consider = Move{{r, c}, {lRow, static_cast<uint8_t>(c - 1)}};
                 consider.rank = 200;
                 ret.emplace_back(consider);
@@ -297,9 +298,9 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
     case (PType::KNIGHT): {
         for (const int8_t *d : knightMoves) {
             BoardPosition check = {r+d[1], c+d[0]};
-            if (r+d[1] >= 0 && r+d[1] < 8 && c+d[0] >= 0 && c+d[0] < 8
-                && (!OnlyOpposingCaps || (at(check).exists() && at(check).isWhite != rget(r,c).isWhite))) {
+            if (ONLY_CAP && !at(check).exists()) continue;
 
+            if (r+d[1] >= 0 && r+d[1] < 8 && c+d[0] >= 0 && c+d[0] < 8 && (!at(check).exists() || at(check).isWhite != rget(r,c).isWhite)) {
                 auto consider = Move{{r, c}, {static_cast<uint8_t>(r+d[1]), static_cast<uint8_t>(c+d[0])}};
                 consider.rank = at(check).exists() * 10 + (at(check).type >= rget(r,c).type) * 30;
                 ret.emplace_back(consider);
@@ -311,8 +312,9 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
     case (PType::KING): {
         for (const int8_t *dir : dirs) {
             BoardPosition check = {r+dir[1], c+dir[0]};
-            if (r+dir[1] >= 0 && r+dir[1] < 8 && c+dir[0] >= 0 && c+dir[0] < 8 &&
-                (!OnlyOpposingCaps || (at(check).exists() && at(check).isWhite != rget(r,c).isWhite))) {
+            if (ONLY_CAP && !at(check).exists()) continue;
+
+            if (r+dir[1] >= 0 && r+dir[1] < 8 && c+dir[0] >= 0 && c+dir[0] < 8 && (!at(check).exists() || at(check).isWhite != rget(r,c).isWhite)) {
                 auto consider = Move{{r, c}, {static_cast<uint8_t>(r + dir[1]), 
                                 static_cast<uint8_t>(c + dir[0])}};
                 consider.rank = at(check).exists() * 10;
@@ -321,7 +323,7 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
         }
 
         // castling
-        if (rget(r, c).moveState == MoveState::NOT_MOVED && !OnlyOpposingCaps) {
+        if (rget(r, c).moveState == MoveState::NOT_MOVED && !ONLY_CAP) {
             // kingside
             if (rget(r, 7).type == PType::ROOK && rget(r, 7).moveState == MoveState::NOT_MOVED
                     && rget(r, 7).isWhite == rget(r, c).isWhite) {
@@ -344,7 +346,7 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
     }
 }
 
-std::vector<Move> Board::pseudoLegalMoves(bool doWhite, bool OnlyOpposingCaps) {
+std::vector<Move> Board::pseudoLegalMoves(bool doWhite, bool ONLY_CAP) {
     std::vector<Move> ret;
 
     // Checks/checkmates? Also, this algo searches entire board. Maybe keep list of pieces for each side?
@@ -355,7 +357,7 @@ std::vector<Move> Board::pseudoLegalMoves(bool doWhite, bool OnlyOpposingCaps) {
     // }}
 
     for (const BoardPosition i : (doWhite ? whitePieces : blackPieces))
-        collectMovesFor(i.row, i.col, ret, OnlyOpposingCaps);
+        collectMovesFor(i.row, i.col, ret, ONLY_CAP);
 
     std::sort(ret.begin(), ret.end(), [](Move a, Move b) {
         return a.rank > b.rank;

@@ -165,9 +165,9 @@ public:
     std::pair<Piece, MoveState> make(Move mov); // Returns captured piece + previous state of piece moved
     void unmake(std::pair<Piece, MoveState> capInfo, Move mov); // undos a Board::make()
 
-    std::vector<Move> pseudoLegalMoves(bool doWhite, bool OnlyOpposingCaps = false);
+    std::vector<Move> pseudoLegalMoves(bool doWhite, bool ONLY_CAP = false);
 
-    void collectMovesFor(uint8_t row, uint8_t col, std::vector<Move> &store, bool OnlyOpposingCaps = false);
+    void collectMovesFor(uint8_t row, uint8_t col, std::vector<Move> &store, bool ONLY_CAP = false);
 
 private:
     static uint64_t zobristTable[64][12];

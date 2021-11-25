@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
     Board board{};
     board.dbgPrint();
 
-    Engine *whiteEngine = new MyEngine();
+    Engine *whiteEngine = new StockfishEngine();
     Engine *blackEngine = new MyEngine();
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
@@ -58,6 +58,7 @@ int main(int argc, char **argv) {
 
     std::vector<Move> undoMoves;
     std::vector<std::pair<Piece, MoveState>> undoCaps;
+    std::vector<Move> toDraw;
 
     // annimation loop
     while (running) {
@@ -115,10 +116,11 @@ int main(int argc, char **argv) {
                     std::cout << board.getFen() << std::endl;
                     break;
                 case SDLK_g: {
-                    turn = false;
                     auto mov = (turn ? whiteEngine : blackEngine)->search(board, turn);
                     undoCaps.push_back(board.make(mov));
                     undoMoves.push_back(mov);
+                    toDraw.push_back(mov);
+                    if (toDraw.size() > 2) toDraw.erase(toDraw.begin());
                     turn ^= true;
                     break;
                 }
@@ -139,8 +141,8 @@ int main(int argc, char **argv) {
         SDL_RenderCopy(rend, boardTex, NULL, NULL);
         board.draw(rend, w, h, font);
 
-        std::vector<Move> moves = board.pseudoLegalMoves(WHITE_SIDE, true);
-        for (const auto i : moves) {
+        toDraw = board.pseudoLegalMoves(WHITE_SIDE, true);
+        for (const auto i : toDraw) {
             // if (board.rget(i.srcRow, i.srcCol).type == PType::KING)
             SDL_RenderDrawLine(rend, i.srcCol * w/8 + w/16, i.srcRow * w/8 + w/16, i.dstCol * w/8 + w/16, i.dstRow * w/8 + w/16);
         }
