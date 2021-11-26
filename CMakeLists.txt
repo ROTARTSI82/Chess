@@ -23,6 +23,6 @@ target_link_libraries(Chess ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY} ${SDL2_IMAGE_L
 
 
 project(ConnectFour)
-add_executable(ConnectFour src/connect4/c4_main.cpp src/connect4/connect4.cpp)
+add_executable(ConnectFour src/connect4/c4_main.cpp src/connect4/connect4.cpp src/connect4/neural_net.cpp)
 target_include_directories(ConnectFour PUBLIC include src)
 target_link_libraries(ConnectFour ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY} ${SDL2_IMAGE_LIBRARY})

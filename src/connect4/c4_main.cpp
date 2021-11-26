@@ -6,6 +6,7 @@
 #include <iostream>
 
 #include <connect4/connect4.hpp>
+#include <connect4/neural_net.hpp>
 
 #define SEARCH_DEPTH 10
 
@@ -41,6 +42,9 @@ int main(int argc, char **argv) {
     C4Board b;
     b.make(b.search(SEARCH_DEPTH));
 
+    NeuralNetwork nn;
+    nn.randomize();
+
     auto checkWins = [&]() -> bool {
         if (b.gameState != C4State::NIL) {
             std::cout << "GAME IS OVER: ";
@@ -48,6 +52,7 @@ int main(int argc, char **argv) {
             case C4State::YELLOW: std::cout << "YELLOW WINS!"; break;
             case C4State::DRAW: std::cout << "DRAW!"; break;
             case C4State::RED: std::cout << "RED WINS!"; break;
+            default: break;
             }
             std::cout << std::endl;
 
@@ -55,6 +60,40 @@ int main(int argc, char **argv) {
             return true;
         }
         return false;
+    };
+
+    auto runNN = [&]() {
+        if (b.turn == C4State::YELLOW) {
+            b.make(b.search(SEARCH_DEPTH));
+            checkWins();
+            return;
+        }
+
+        Vector<84> inp;
+        memset(inp.data, 0, 84 * sizeof(double));
+
+        for (int x = 0; x < BWIDTH; x++) {
+            int y = 0;
+            for (const auto val : b.columns[x]) {
+                inp[(x * BWIDTH + y) * 2 + (val == C4State::RED ? 0 : 1)] = 1.0;
+                y++;
+            }
+        }
+
+        nn.input = inp;
+        Vector<7> res = nn.run();
+        for (int i = 0; i < 7; i++) {
+            std::cout << "Neural net[" << i << "] = " << res[i] << std::endl;
+        }
+
+        C4Move goodMov = b.search(SEARCH_DEPTH);
+        Vector<7> expected;
+        memset(expected.data, 0, 7 * sizeof(double));
+        expected[goodMov] = 1.0;
+        nn.backprop(inp, expected);
+
+        b.make(goodMov);
+        checkWins();
     };
 
     // annimation loop
@@ -77,8 +116,9 @@ int main(int argc, char **argv) {
 
                 b.make(col);
                 if (checkWins()) break;
-                b.make(b.search(SEARCH_DEPTH));
-                checkWins();
+
+
+                runNN();
                 break;
             }
             case SDL_KEYDOWN: {
@@ -87,11 +127,13 @@ int main(int argc, char **argv) {
                     b = C4Board();
                     break;
                 case SDLK_g: 
-                    b.make(b.search(SEARCH_DEPTH));
-                    checkWins();
+                    runNN();
+                    break;
+                case SDLK_RETURN:
+                    nn.applyBackprops();
                     break;
                 }
-                
+
                 break;
             }
             }
