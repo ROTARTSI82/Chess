@@ -418,6 +418,7 @@ Move RandomEngine::search(Board &b, bool side) {
 
 
 void Board::initZobrist() {
+    std::cout << "INIT ZOB";
     std::random_device rd;
 
     std::mt19937_64 e2(rd());

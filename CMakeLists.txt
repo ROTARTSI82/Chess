@@ -6,8 +6,8 @@ project(Chess)
 
 # add_subdirectory(dep/SDL)
 # add_subdirectory(dep/SDL_image)
-add_compile_options(-g3 -Ofast -fsanitize=address -fno-omit-frame-pointer)
-add_link_options(-g3 -Ofast -fsanitize=address -fno-omit-frame-pointer)
+add_compile_options(-Ofast) # -g3 -fsanitize=address -fno-omit-frame-pointer)
+add_link_options(-Ofast) # -g3 -fsanitize=address -fno-omit-frame-pointer)
 
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
@@ -19,3 +19,10 @@ add_executable(Chess src/main.cpp src/chess.cpp src/stockfish_engine.cpp src/pop
 target_include_directories(Chess PUBLIC include src)
 target_link_libraries(Chess ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY} ${SDL2_IMAGE_LIBRARY})
 # target_include_directories(Chess PUBLIC dep/SDL/include dep/SDL_image)
+
+
+
+project(ConnectFour)
+add_executable(ConnectFour src/connect4/c4_main.cpp src/connect4/connect4.cpp)
+target_include_directories(ConnectFour PUBLIC include src)
+target_link_libraries(ConnectFour ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY} ${SDL2_IMAGE_LIBRARY})

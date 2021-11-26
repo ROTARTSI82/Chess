@@ -24,8 +24,8 @@ int main(int argc, char **argv) {
     Board board{};
     board.dbgPrint();
 
-    Engine *whiteEngine = new StockfishEngine();
-    Engine *blackEngine = new MyEngine();
+    Engine *whiteEngine = new MyEngine(pawnGenocideEvaluator);
+    Engine *blackEngine = new MyEngine(enPassantEvaluator);
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
                                         SDL_WINDOWPOS_CENTERED,
@@ -34,20 +34,22 @@ int main(int argc, char **argv) {
     SDL_Renderer* rend = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
 
 
-    auto tex = [&](const std::string &filename) -> SDL_Texture * {
+    auto tex = [&](std::string filename) -> SDL_Texture * {
+        filename = "./res/" + filename;
         SDL_Surface *bsurf = IMG_Load(filename.c_str());
         SDL_Texture *ret = SDL_CreateTextureFromSurface(rend, bsurf);
         SDL_FreeSurface(bsurf);
         return ret;
     };
 
-    SDL_Texture *boardTex = tex("./board.png");
+    SDL_Texture *boardTex = tex("board.png");
     SDL_Texture *font[] = {
-        tex("./select.png"), tex("./bpawn.png"), tex("./bknight.png"), tex("./bbishop.png"), tex("./brook.png"), tex("./bqueen.png"), tex("./bking.png"),
-        tex("./select.png"), tex("./wpawn.png"), tex("./wknight.png"), tex("./wbishop.png"), tex("./wrook.png"), tex("./wqueen.png"), tex("./wking.png")
+        tex("select.png"), tex("bpawn.png"), tex("bknight.png"), tex("bbishop.png"), tex("brook.png"), tex("bqueen.png"), tex("bking.png"),
+        tex("select.png"), tex("wpawn.png"), tex("wknight.png"), tex("wbishop.png"), tex("wrook.png"), tex("wqueen.png"), tex("wking.png")
     };
 
-    SDL_Texture *selectTex = tex("./select.png");
+    SDL_Texture *selectTex = tex("select.png");
+    SDL_Texture *moveTex = tex("move.png");
 
     // controls annimation loop
     bool running = true;
@@ -59,6 +61,7 @@ int main(int argc, char **argv) {
     std::vector<Move> undoMoves;
     std::vector<std::pair<Piece, MoveState>> undoCaps;
     std::vector<Move> toDraw;
+    auto legalMoves = std::vector<Move>();
 
     // annimation loop
     while (running) {
@@ -81,15 +84,13 @@ int main(int argc, char **argv) {
                 // std::cout << "Selected " << (int) selected.col << ", " << (int) selected.row << std::endl;
 
                 if (!isSelected) { // make the move
-                    auto legalMoves = std::vector<Move>();
-                    board.collectMovesFor(prev.row, prev.col, legalMoves);
-
                     bool found = false;
                     for (const auto m : legalMoves)
                         found |= (m.dstCol == selected.col && m.dstRow == selected.row);
 
                     if (!found || board.rget(prev.row, prev.col).isWhite == false) {
                         std::cout << "Illegal move you idiot" << std::endl;
+                        legalMoves.clear();
                         break;
                     }
 
@@ -106,6 +107,14 @@ int main(int argc, char **argv) {
                     mov = blackEngine->search(board, BLACK_SIDE);
                     undoCaps.push_back(board.make(mov));
                     undoMoves.push_back(mov);
+                    toDraw.clear();
+                    toDraw.push_back(mov);
+
+                    legalMoves.clear();
+                } else {
+                    legalMoves.clear();
+                    if (board.rget(selected.row, selected.col).isWhite)
+                        board.collectMovesFor(selected.row, selected.col, legalMoves);
                 }
 
                 break;
@@ -129,8 +138,8 @@ int main(int argc, char **argv) {
                     undoCaps.pop_back(); undoMoves.pop_back();
                     break;
                 case SDLK_s:
-                    std::cout << "Black eval: " << defaultEvaluator(board, false) << std::endl;
-                    std::cout << "White eval: " << defaultEvaluator(board, true) << std::endl;
+                    std::cout << "Black eval: " << swarmEvaluator(board, false) << std::endl;
+                    std::cout << "White eval: " << swarmEvaluator(board, true) << std::endl;
                     break;
                 case SDLK_h:
                     std::cout << "Zobrist hash = " << board.hash() << std::endl;
@@ -145,10 +154,17 @@ int main(int argc, char **argv) {
         SDL_RenderCopy(rend, boardTex, NULL, NULL);
         board.draw(rend, w, h, font);
 
-        toDraw = board.pseudoLegalMoves(WHITE_SIDE, true);
+        // toDraw = board.pseudoLegalMoves(WHITE_SIDE, true);
         for (const auto i : toDraw) {
             // if (board.rget(i.srcRow, i.srcCol).type == PType::KING)
-            SDL_RenderDrawLine(rend, i.srcCol * w/8 + w/16, i.srcRow * w/8 + w/16, i.dstCol * w/8 + w/16, i.dstRow * w/8 + w/16);
+            SDL_RenderDrawLine(rend, i.srcCol * w/8 + w/16, i.srcRow * h/8 + h/16, i.dstCol * w/8 + w/16, i.dstRow * h/8 + h/16);
+        }
+
+        SDL_Rect moveDst = {0, 0, w / 8, h / 8};
+        for (const auto i : legalMoves) {
+            moveDst.x = i.dstCol * w/8;
+            moveDst.y = i.dstRow * h/8;
+            SDL_RenderCopy(rend, moveTex, NULL, &moveDst);
         }
 
         if (isSelected) {
@@ -171,6 +187,8 @@ int main(int argc, char **argv) {
 
     for (int i = 1; i < 14; i++) SDL_DestroyTexture(font[i]);
     SDL_DestroyTexture(boardTex);
+    SDL_DestroyTexture(selectTex);
+    SDL_DestroyTexture(moveTex);
     SDL_DestroyRenderer(rend);
     SDL_DestroyWindow(win);
     delete whiteEngine;

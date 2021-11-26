@@ -29,14 +29,14 @@ enum class MoveState : uint8_t {
 
 inline double valueOf(PType piece) {
     switch (piece) {
-    case PType::PAWN: return 100;
+    case PType::PAWN: return 1;
     case PType::KNIGHT:
     case PType::BISHOP:
-        return 300;
-    case PType::ROOK: return 500;
-    case PType::QUEEN: return 900;
+        return 3;
+    case PType::ROOK: return 5;
+    case PType::QUEEN: return 9;
     case PType::KING:
-        return 9001 * 100; // over nine thousand
+        return 9001; // over nine thousand
     default: return 0;
     }
 }
