@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <random>
 
 #define BWIDTH 7
 #define BHEIGHT 6
@@ -36,6 +37,8 @@ public:
     inline bool legal(C4Move mov) {
         return columns[mov].size() < BHEIGHT;
     }
+
+    void randMove();
 
     int score(int alpha, int beta, int depth);
     C4Move search(int depth);

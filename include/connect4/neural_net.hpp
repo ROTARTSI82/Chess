@@ -4,14 +4,17 @@
 #include <iostream>
 #include <cmath>
 
+
+#define GRADIENT_STEP_SCALE_FACTOR 0.25
+
 inline double squish(double in) {
     return 1 / (1 + std::exp(-in));
-    return std::max(in, 0.0);
+    // return std::max(in, 0.0);
 }
 
 inline double squishPrime(double in) {
     return std::exp(-in) / std::pow(1 + std::exp(-in), 2);
-    return in < 0 ? 0 : 1;
+    // return in < 0 ? 0 : 1;
 }
 
 template <int, int>
@@ -90,13 +93,15 @@ public:
 
     void apply() {
         for (int j = 0; j < No; j++) {
-            double nudge = dBiasAcc[j] / numBackProps;
+            double nudge = GRADIENT_STEP_SCALE_FACTOR * dBiasAcc[j] / numBackProps;
+            dBiasAcc[j] = 0;
             biases[j] += nudge;
-            std::cout << "Bias " << j << " nudged by " << nudge << std::endl;
+            // std::cout << "Bias " << j << " nudged by " << nudge << std::endl;
             for (int i = 0; i < PrevNo; i++) {
-                nudge = dWeightAcc[i][j] / numBackProps;
+                nudge = GRADIENT_STEP_SCALE_FACTOR * dWeightAcc[i][j] / numBackProps;
+                dWeightAcc[i][j] = 0;
                 weights[i][j] += nudge;
-                std::cout << "Weight " << i << j << " nudged by " << nudge << std::endl;
+                // std::cout << "Weight " << i << j << " nudged by " << nudge << std::endl;
             }
         }
 
@@ -115,14 +120,14 @@ public:
             double dCdBias = dCdAi * dAidZi;
             // if (std::abs(dCdBias) > std::numeric_limits<double>::epsilon())
             //     std::cout << "Bias " << i << " nudged " << dCdBias << std::endl;
-            dBiasAcc[i] -= dCdBias;
+            dBiasAcc[i] += dCdBias;
 
             for (int y = 0; y < PrevNo; y++) {
                 dCdPrevA[y] += weights[y][i] * dCdBias;
                 double dCdWyi = dCdBias * prevActs[y];
                 // if (std::abs(dCdWyi) > std::numeric_limits<double>::epsilon())
                 //     std::cout << "Weight " << y << i << " nudged " << dCdWyi << std::endl;
-                dWeightAcc[y][i] -= dCdWyi;
+                dWeightAcc[y][i] += dCdWyi;
             }
         }
         numBackProps++;
@@ -147,9 +152,12 @@ public:
 
     void randomize();
 
-    void backprop(const Vector<84> &inp, const Vector<7> &expectedOut);
+    void backprop(const Vector<7> &expectedOut);
 
     Vector<7> run();
+
+    void toFile(const std::string &file);
+    void fromFile(const std::string &file);
 
     void applyBackprops();
 };

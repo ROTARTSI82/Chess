@@ -45,7 +45,7 @@ Vector<7> NeuralNetwork::run() {
     return ret;
 }
 
-void NeuralNetwork::backprop(const Vector<84> &inp, const Vector<7> &expectedOut) {
+void NeuralNetwork::backprop(const Vector<7> &expectedOut) {
     Vector<42> h1Z = input.matMul(h1.weights) + h1.biases;
     Vector<42> h1Act;
     for (int i = 0; i < 42; i++) h1Act[i] = squish(h1Z[i]);
@@ -76,7 +76,65 @@ void NeuralNetwork::backprop(const Vector<84> &inp, const Vector<7> &expectedOut
 
 
 void NeuralNetwork::applyBackprops() {
+    if (h1.numBackProps == 0) {
+        std::cout << "No backprops to apply!" << std::endl; 
+        return; 
+    }
     h1.apply();
     h2.apply();
     output.apply();
+    std::cout << "Batch complete" << std::endl;
 }
+
+void NeuralNetwork::fromFile(const std::string &file) {
+
+}
+
+#include <fstream>
+
+void NeuralNetwork::toFile(const std::string &file) {
+    std::ofstream out(file);
+    out << "{\"hidden1\": {\"biases\": [\n";
+    for (int i = 0; i < 42; i++) {
+        if (i) out << ", ";
+        out << h1.biases[i];
+    }
+
+    out << "\n], \"weights\": [\n";
+    for (int i = 0; i < 84; i++) {
+        for (int j = 0; j < 42; j++) {
+            if (i || j) out << ", ";
+            out << h1.weights[i][j];
+        }
+    }
+    out << "\n]}, \"hidden2\": {\"biases\": [\n";
+    for (int i = 0; i < 42; i++) {
+        if (i) out << ", ";
+        out << h2.biases[i];
+    }
+
+    out << "\n], \"weights\": [\n";
+    for (int i = 0; i < 42; i++) {
+        for (int j = 0; j < 42; j++) {
+            if (i || j) out << ", ";
+            out << h2.weights[i][j];
+        }
+    }
+
+    out << "\n]}, \"output\": {\"biases\": [\n";
+    for (int i = 0; i < 7; i++) {
+        if (i) out << ", ";
+        out << output.biases[i];
+    }
+
+    out << "\n], \"weights\": [\n";
+    for (int i = 0; i < 42; i++) {
+        for (int j = 0; j < 7; j++) {
+            if (i || j) out << ", ";
+            out << output.weights[i][j];
+        }
+    }
+
+    out << "\n]} }";
+}
+

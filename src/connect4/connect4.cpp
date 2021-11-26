@@ -108,7 +108,10 @@ C4Move C4Board::search(int depth) {
     if (gameState != C4State::NIL) throw std::runtime_error("Game is already over bozo");
     int alpha = -9999;
 
-    int selected = -1;
+    static std::random_device dev;
+    static std::mt19937_64 eng = std::mt19937_64(dev());
+
+    std::vector<int> candidates;
     for (int move = 0; move < BWIDTH; move++) {
         if (!legal(move)) continue;
         make(move);
@@ -116,16 +119,37 @@ C4Move C4Board::search(int depth) {
         unmake(move);
 
         if (s > alpha) {
-            selected = move;
+            candidates.clear();
+            candidates.push_back(move);
             alpha = s;
+        } else if (s == alpha) {
+            candidates.push_back(move);
         }
     }
 
-    if (selected == -1) {
+    if (candidates.empty()) {
         throw std::runtime_error("no legal moves");
     }
 
-    std::cout << "My score is " << alpha << std::endl;
+    auto dist = std::uniform_int_distribution<int>(0, candidates.size() - 1);
+    auto selected = candidates.at(dist(eng));
+    // std::cout << "My score is " << alpha << " selected " << selected << std::endl;
 
     return static_cast<uint8_t>(selected);
+}
+
+void C4Board::randMove() {
+    std::vector<int> legals;
+    for (int i = 0; i < BWIDTH; i++) {
+        if (legal(i)) {
+            legals.push_back(i);
+        }
+    }
+
+    static std::random_device rd;
+    static std::mt19937_64 mt = std::mt19937_64(rd());
+
+    std::uniform_int_distribution<int> dist(0, legals.size() - 1);
+    auto select = dist(mt);
+    make(legals.at(select));
 }

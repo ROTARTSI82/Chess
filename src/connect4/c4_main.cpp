@@ -62,10 +62,14 @@ int main(int argc, char **argv) {
         return false;
     };
 
-    auto runNN = [&]() {
+    auto runNN = [&](bool learn = true, bool playMinimax = false) {
         if (b.turn == C4State::YELLOW) {
-            b.make(b.search(SEARCH_DEPTH));
-            checkWins();
+            if (playMinimax) b.make(b.search(SEARCH_DEPTH)); else b.randMove();
+            // b.make(b.search(SEARCH_DEPTH));
+            if (checkWins()) {
+                b = C4Board();
+                nn.applyBackprops();
+            }
             return;
         }
 
@@ -75,25 +79,49 @@ int main(int argc, char **argv) {
         for (int x = 0; x < BWIDTH; x++) {
             int y = 0;
             for (const auto val : b.columns[x]) {
-                inp[(x * BWIDTH + y) * 2 + (val == C4State::RED ? 0 : 1)] = 1.0;
+                inp[(x * BHEIGHT + y) * 2 + (val == C4State::RED ? 0 : 1)] = 1.0;
                 y++;
             }
         }
 
         nn.input = inp;
+        if (learn) {
+            C4Move goodMov = b.search(SEARCH_DEPTH);
+            Vector<7> expected;
+            memset(expected.data, 0, 7 * sizeof(double));
+            expected[goodMov] = 1.0;
+            nn.backprop(expected);
+
+            if (playMinimax) b.make(goodMov); else b.randMove();
+            if (checkWins()) {
+                b = C4Board();
+                nn.applyBackprops();
+            }
+            return;
+        }
+
         Vector<7> res = nn.run();
+        int selected = 0;
+        double max = -9999;
         for (int i = 0; i < 7; i++) {
+            if (res[i] > max) {
+                max = res[i];
+                selected = i;
+            }
             std::cout << "Neural net[" << i << "] = " << res[i] << std::endl;
         }
 
-        C4Move goodMov = b.search(SEARCH_DEPTH);
-        Vector<7> expected;
-        memset(expected.data, 0, 7 * sizeof(double));
-        expected[goodMov] = 1.0;
-        nn.backprop(inp, expected);
+        std::cout << "Learning disabled. Tried move: " << selected << std::endl;
+        if (b.legal(selected))
+            b.make(selected);
+        else {
+            std::cout << "Fell back to minimax search" << std::endl;
+            b.make(b.search(SEARCH_DEPTH));
+        }
 
-        b.make(goodMov);
-        checkWins();
+        if (checkWins()) {
+            b = C4Board();
+        }
     };
 
     // annimation loop
@@ -118,7 +146,7 @@ int main(int argc, char **argv) {
                 if (checkWins()) break;
 
 
-                runNN();
+                runNN(false); // no learning when we're playing it
                 break;
             }
             case SDL_KEYDOWN: {
@@ -129,8 +157,11 @@ int main(int argc, char **argv) {
                 case SDLK_g: 
                     runNN();
                     break;
+                case SDLK_m:
+                    runNN(true, true);
+                    break;
                 case SDLK_RETURN:
-                    nn.applyBackprops();
+                    nn.toFile("nn.json");
                     break;
                 }
 
