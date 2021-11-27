@@ -3,9 +3,10 @@
 #include <algorithm>
 #include <iostream>
 #include <cmath>
+#include <cstring>
 
-
-#define GRADIENT_STEP_SCALE_FACTOR 0.25
+// 0.1 before
+#define GRADIENT_STEP_SCALE_FACTOR 0.3
 
 inline double squish(double in) {
     return 1 / (1 + std::exp(-in));
@@ -146,9 +147,10 @@ public:
 class NeuralNetwork {
 public:
     Vector<84> input;
-    Layer<84, 42> h1;
-    Layer<42, 42> h2;
-    Layer<42, 7> output;
+    Layer<84, 84> h1;
+    Layer<84, 42> h2;
+    Layer<42, 7> h3;
+    Layer<7, 7> output;
 
     void randomize();
 

@@ -14,6 +14,16 @@ enum class C4State : uint8_t {
 typedef uint8_t C4Move;
 
 
+template <typename T>
+inline T randOf(const std::vector<T> &vec) {
+    static std::random_device dev;
+    static std::mt19937_64 eng = std::mt19937_64(dev());
+
+    auto dist = std::uniform_int_distribution<int>(0, vec.size() - 1);
+    return vec.at(dist(eng));
+}
+
+
 class C4Board {
 public:
 
@@ -41,6 +51,8 @@ public:
     void randMove();
 
     int score(int alpha, int beta, int depth);
+
+    std::vector<C4Move> searchAll(int depth);
     C4Move search(int depth);
 
     // 7 columns, 6 rows

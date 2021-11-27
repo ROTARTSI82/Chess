@@ -10,6 +10,9 @@
 
 #define SEARCH_DEPTH 10
 
+// how many training inputs to run before running backpropagation
+#define BACKPROPS_EVERY 128
+
 int main(int argc, char **argv) {
 
     // retutns zero on success else non-zero
@@ -42,8 +45,11 @@ int main(int argc, char **argv) {
     C4Board b;
     b.make(b.search(SEARCH_DEPTH));
 
+    int numRun = 0;
     NeuralNetwork nn;
     nn.randomize();
+    nn.toFile("randomNet.json");
+    nn.fromFile("nn-0.16.json");
 
     auto checkWins = [&]() -> bool {
         if (b.gameState != C4State::NIL) {
@@ -68,7 +74,6 @@ int main(int argc, char **argv) {
             // b.make(b.search(SEARCH_DEPTH));
             if (checkWins()) {
                 b = C4Board();
-                nn.applyBackprops();
             }
             return;
         }
@@ -86,43 +91,50 @@ int main(int argc, char **argv) {
 
         nn.input = inp;
         if (learn) {
-            C4Move goodMov = b.search(SEARCH_DEPTH);
+            std::vector<C4Move> goodMovs = b.searchAll(SEARCH_DEPTH);
             Vector<7> expected;
             memset(expected.data, 0, 7 * sizeof(double));
-            expected[goodMov] = 1.0;
+            for (C4Move goodMov : goodMovs)
+                expected[goodMov] = 1.0;
             nn.backprop(expected);
+            if (++numRun > BACKPROPS_EVERY) {
+                numRun = 0;
+                nn.applyBackprops();
+                std::cout << "======================[ BATCH COMPLETE ]===================" << std::endl;
+            }
 
-            if (playMinimax) b.make(goodMov); else b.randMove();
+            if (playMinimax) b.make(randOf(goodMovs)); else b.randMove();
             if (checkWins()) {
                 b = C4Board();
-                nn.applyBackprops();
             }
             return;
         }
 
         Vector<7> res = nn.run();
-        int selected = 0;
-        double max = -9999;
+        std::vector<std::pair<int,double>> sorted;
         for (int i = 0; i < 7; i++) {
-            if (res[i] > max) {
-                max = res[i];
-                selected = i;
-            }
+            sorted.emplace_back(std::make_pair(i, res[i]));
             std::cout << "Neural net[" << i << "] = " << res[i] << std::endl;
         }
 
-        std::cout << "Learning disabled. Tried move: " << selected << std::endl;
-        if (b.legal(selected))
-            b.make(selected);
-        else {
-            std::cout << "Fell back to minimax search" << std::endl;
-            b.make(b.search(SEARCH_DEPTH));
+        std::sort(sorted.begin(), sorted.end(), [](const std::pair<int,double> &a, const std::pair<int,double> &b) { return a.second > b.second; });
+
+        for (auto p : sorted) {
+            std::cout << "pair " << p.first << ", " << p.second << std::endl;
+            if (b.legal(p.first)) {
+                b.make(p.first);
+                std::cout << "CHOSE " << p.first << std::endl;
+                break;
+            }
         }
 
         if (checkWins()) {
             b = C4Board();
         }
     };
+
+    bool isTraining = false;
+    bool useMinimax = true;
 
     // annimation loop
     while (running) {
@@ -155,10 +167,14 @@ int main(int argc, char **argv) {
                     b = C4Board();
                     break;
                 case SDLK_g: 
-                    runNN();
+                    runNN(false);
                     break;
                 case SDLK_m:
-                    runNN(true, true);
+                    isTraining ^= true;
+                    break;
+                case SDLK_r:
+                    useMinimax ^= true;
+                    std::cout << "USE MINIMAX = " << useMinimax << std::endl;
                     break;
                 case SDLK_RETURN:
                     nn.toFile("nn.json");
@@ -169,6 +185,8 @@ int main(int argc, char **argv) {
             }
             }
         }
+
+        if (isTraining) runNN(true, useMinimax);
 
         // clears the screen
         SDL_RenderClear(rend);
@@ -190,8 +208,6 @@ int main(int argc, char **argv) {
         // for multiple rendering
         SDL_RenderPresent(rend);
 
-        // calculates to 60 fps
-        SDL_Delay(1000 / 60);
     }
 
     SDL_DestroyTexture(boardTex);

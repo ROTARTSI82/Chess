@@ -2,6 +2,8 @@
 
 #include "chess.hpp"
 #include <unordered_map>
+#include <mutex>
+#include <functional>
 
 double defaultEvaluator(Board &b, bool side);
 double swarmEvaluator(Board &b, bool side);

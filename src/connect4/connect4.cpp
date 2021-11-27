@@ -104,14 +104,11 @@ int C4Board::score(int alpha, int beta, int depth) {
     throw std::runtime_error("What how did we get here");
 }
 
-C4Move C4Board::search(int depth) {
+std::vector<C4Move> C4Board::searchAll(int depth) {
     if (gameState != C4State::NIL) throw std::runtime_error("Game is already over bozo");
     int alpha = -9999;
 
-    static std::random_device dev;
-    static std::mt19937_64 eng = std::mt19937_64(dev());
-
-    std::vector<int> candidates;
+    std::vector<C4Move> candidates;
     for (int move = 0; move < BWIDTH; move++) {
         if (!legal(move)) continue;
         make(move);
@@ -131,11 +128,14 @@ C4Move C4Board::search(int depth) {
         throw std::runtime_error("no legal moves");
     }
 
-    auto dist = std::uniform_int_distribution<int>(0, candidates.size() - 1);
-    auto selected = candidates.at(dist(eng));
-    // std::cout << "My score is " << alpha << " selected " << selected << std::endl;
+    return candidates;
+}
 
-    return static_cast<uint8_t>(selected);
+C4Move C4Board::search(int depth) {
+
+    auto candidates = searchAll(depth);
+
+    return randOf(candidates);
 }
 
 void C4Board::randMove() {
