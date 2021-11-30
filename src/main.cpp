@@ -24,8 +24,8 @@ int main(int argc, char **argv) {
     Board board{};
     board.dbgPrint();
 
-    Engine *whiteEngine = new MyEngine(pawnGenocideEvaluator);
-    Engine *blackEngine = new MyEngine(enPassantEvaluator);
+    MyEngine *whiteEngine = new MyEngine(defaultEvaluator);
+    MyEngine *blackEngine = new MyEngine(defaultEvaluator);
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
                                         SDL_WINDOWPOS_CENTERED,
@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
                     for (const auto m : legalMoves)
                         found |= (m.dstCol == selected.col && m.dstRow == selected.row);
 
-                    if (!found || board.rget(prev.row, prev.col).isWhite == false) {
+                    if (!found) { // || board.rget(prev.row, prev.col).isWhite == false) {
                         std::cout << "Illegal move you idiot" << std::endl;
                         legalMoves.clear();
                         break;
@@ -103,17 +103,10 @@ int main(int argc, char **argv) {
 
                     undoCaps.push_back(board.make(mov));
                     undoMoves.push_back(mov);
-
-                    mov = blackEngine->search(board, BLACK_SIDE);
-                    undoCaps.push_back(board.make(mov));
-                    undoMoves.push_back(mov);
-                    toDraw.clear();
-                    toDraw.push_back(mov);
-
                     legalMoves.clear();
                 } else {
                     legalMoves.clear();
-                    if (board.rget(selected.row, selected.col).isWhite)
+                    // if (board.rget(selected.row, selected.col).isWhite)
                         board.collectMovesFor(selected.row, selected.col, legalMoves);
                 }
 
@@ -124,16 +117,18 @@ int main(int argc, char **argv) {
                 case SDLK_f:
                     std::cout << board.getFen() << std::endl;
                     break;
-                case SDLK_g: {
-                    auto mov = (turn ? whiteEngine : blackEngine)->search(board, turn);
-                    undoCaps.push_back(board.make(mov));
-                    undoMoves.push_back(mov);
-                    toDraw.push_back(mov);
-                    if (toDraw.size() > 2) toDraw.erase(toDraw.begin());
-                    turn ^= true;
+                case SDLK_b:
+                    undoMoves.push_back(blackEngine->search(board, false));
+                    undoCaps.push_back(board.make(undoMoves.back()));
+                    // toDraw = blackEngine->line;
                     break;
-                }
+                case SDLK_w:
+                    undoMoves.push_back(whiteEngine->search(board, true));
+                    undoCaps.push_back(board.make(undoMoves.back()));
+                    // toDraw = whiteEngine->line;
+                    break;
                 case SDLK_BACKSPACE:
+                    if (undoMoves.empty()) break;
                     board.unmake(undoCaps.back(), undoMoves.back());
                     undoCaps.pop_back(); undoMoves.pop_back();
                     break;

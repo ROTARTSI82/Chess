@@ -14,9 +14,6 @@ double pawnGenocideEvaluator(Board &b, bool side);
 
 class Searcher {
 public:
-    
-
-public:
     Board *b;
     bool isWhite;
     int depth;
@@ -27,7 +24,7 @@ public:
     // the call stack from growing excessively.
     double scoreOf(double alpha, double beta);
 
-    std::unordered_map<uint64_t, double> *transpositionTable;
+    std::unordered_map<uint64_t, std::pair<double, int>> *transpositionTable;
     std::mutex *tableMtx;
 };
 

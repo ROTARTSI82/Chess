@@ -130,6 +130,7 @@ public:
 
     static void initZobrist();
 
+    Board(const Board &other);
     Board();
     ~Board();
 

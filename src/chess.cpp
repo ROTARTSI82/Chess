@@ -243,11 +243,11 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
             if (lRow == 0 || lRow == 7) {
                 // checks for promoting to both queen and knight
                 mov.doPromote = true;
+                // mov.rank = 240;
+                // mov.promoteTo = PromoteType::KNIGHT;
+                // ret.push_back(mov);
                 mov.rank = 255;
                 mov.promoteTo = PromoteType::QUEEN;
-                ret.push_back(mov);
-                mov.rank = 240;
-                mov.promoteTo = PromoteType::KNIGHT;
             } else if (rget(r,c).moveState == MoveState::NOT_MOVED && 
                         !rget(r + 2*lookDir, c).exists()) {
                 // no need to check for promotion when NOT_MOVED
@@ -263,11 +263,11 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
                 mov.rank = 220;
                 if (lRow == 0 || lRow == 7) { 
                     mov.doPromote = true; 
+                    // mov.rank = 240;
+                    // mov.promoteTo = PromoteType::KNIGHT;
+                    // ret.push_back(mov); // posibility of promoting to both queen and knight
                     mov.promoteTo = PromoteType::QUEEN;
                     mov.rank = 255;
-                    ret.push_back(mov); // posibility of promoting to both queen and knight
-                    mov.rank = 240;
-                    mov.promoteTo = PromoteType::KNIGHT;
                 }
                 ret.push_back(mov);
             }
@@ -287,11 +287,11 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
                 mov.rank = 220;
                 if (lRow == 0 || lRow == 7) { 
                     mov.doPromote = true; 
+                    // mov.rank = 240;
+                    // mov.promoteTo = PromoteType::KNIGHT;
+                    // ret.push_back(mov);
                     mov.promoteTo = PromoteType::QUEEN;
                     mov.rank = 255;
-                    ret.push_back(mov);
-                    mov.rank = 240;
-                    mov.promoteTo = PromoteType::KNIGHT;
                 }
                 ret.push_back(mov);
             }
@@ -428,4 +428,8 @@ void Board::initZobrist() {
     for (int i = 0; i < 64; i++)
         for (int j = 0; j < 12; j++)
             zobristTable[i][j] = dist(e2);
+}
+
+Board::Board(const Board &other) : blackPieces(other.blackPieces), whitePieces(other.whitePieces), runningHash(other.runningHash) {
+    memcpy(board, other.board, sizeof(Piece) * 64);
 }
