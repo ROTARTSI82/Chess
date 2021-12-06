@@ -70,22 +70,21 @@ int C4Board::score(int alpha, int beta, int depth) {
     case C4State::NIL: {
         if (depth <= 0) return 0;
 
-        // // disable alpha beta pruning
-        // alpha = -9999;
+        int value = std::numeric_limits<int>::min();
         for (int move = 0; move < BWIDTH; move++) {
             if (!legal(move)) continue;
             make(move);
-            int s = -score(-beta, -alpha, depth - 1);
+            value = std::max(-score(-beta, -alpha, depth - 1), value);
             unmake(move);
 
             // alpha beta pruning
-            if (s >= beta) {
-                return beta;
+            if (alpha > beta) {
+                return value;
             }
-            alpha = std::max(alpha, s);
+            alpha = std::max(alpha, value);
         }
 
-        return alpha;
+        return value;
     }
     case C4State::DRAW: { 
         // std::cout << "FOUND DRAW\n";
@@ -106,13 +105,13 @@ int C4Board::score(int alpha, int beta, int depth) {
 
 std::vector<C4Move> C4Board::searchAll(int depth) {
     if (gameState != C4State::NIL) throw std::runtime_error("Game is already over bozo");
-    int alpha = -9999;
+    int alpha = std::numeric_limits<int>::min();
 
     std::vector<C4Move> candidates;
     for (int move = 0; move < BWIDTH; move++) {
         if (!legal(move)) continue;
         make(move);
-        int s = -score(-9999, -alpha, depth - 1);
+        int s = -score(std::numeric_limits<int>::min(), -alpha, depth - 1);
         unmake(move);
 
         if (s > alpha) {
@@ -127,6 +126,8 @@ std::vector<C4Move> C4Board::searchAll(int depth) {
     if (candidates.empty()) {
         throw std::runtime_error("no legal moves");
     }
+
+    std::cout << "ALPHA = " << alpha << std::endl;
 
     return candidates;
 }

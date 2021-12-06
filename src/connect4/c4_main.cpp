@@ -158,7 +158,9 @@ int main(int argc, char **argv) {
                 if (checkWins()) break;
 
 
-                runNN(false); // no learning when we're playing it
+                // runNN(false); // no learning when we're playing it
+                b.make(b.search(SEARCH_DEPTH));
+                checkWins();
                 break;
             }
             case SDL_KEYDOWN: {

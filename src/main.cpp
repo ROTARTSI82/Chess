@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
                 running = false;
                 break;
             case SDL_MOUSEBUTTONDOWN: {
-                // if (!turn) break;
+                if (!turn) break;
                 BoardPosition prev = selected;
                 isSelected ^= true;
 
@@ -104,9 +104,12 @@ int main(int argc, char **argv) {
                     undoCaps.push_back(board.make(mov));
                     undoMoves.push_back(mov);
                     legalMoves.clear();
+
+                    undoMoves.push_back(blackEngine->search(board, false));
+                    undoCaps.push_back(board.make(undoMoves.back()));
                 } else {
                     legalMoves.clear();
-                    // if (board.rget(selected.row, selected.col).isWhite)
+                    if (board.rget(selected.row, selected.col).isWhite)
                         board.collectMovesFor(selected.row, selected.col, legalMoves);
                 }
 
@@ -128,9 +131,11 @@ int main(int argc, char **argv) {
                     // toDraw = whiteEngine->line;
                     break;
                 case SDLK_BACKSPACE:
-                    if (undoMoves.empty()) break;
-                    board.unmake(undoCaps.back(), undoMoves.back());
-                    undoCaps.pop_back(); undoMoves.pop_back();
+                    if (undoMoves.size() < 2) break;
+                    for (int i = 0; i < 2; i++) {
+                        board.unmake(undoCaps.back(), undoMoves.back());
+                        undoCaps.pop_back(); undoMoves.pop_back();
+                    }
                     break;
                 case SDLK_s:
                     std::cout << "Black eval: " << swarmEvaluator(board, false) << std::endl;

@@ -13,7 +13,7 @@ public:
 
     void moveFromAlgebraic(const std::string &mov, Move &store, Board &b);
 
-    std::string searchCommand = "setoption name UCI_Elo value 2850\nposition fen {FEN}\ngo movetime 1000\n";
+    std::string searchCommand = "setoption name Skill Level value 0\nsetoption name UCI_Elo value 500\nposition fen {FEN}\ngo movetime 1000\n";
     struct popen2 proc;
 };
 

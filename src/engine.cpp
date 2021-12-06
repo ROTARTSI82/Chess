@@ -145,7 +145,38 @@ double enPassantEvaluator(Board &b, bool side) {
     return kingFound ? acc : -std::numeric_limits<double>::infinity();
 }
 
+double Searcher::searchCaptures(double alpha, double beta) {
+#if TRANSPOSITION_TABLE
+    uint64_t hash = b->hash();
+    {
+        std::lock_guard lg(*tableMtx);
+        if (transpositionTable->contains(hash) && transpositionTable->at(hash).second >= depth) {
+            return transpositionTable->at(hash).first * (isWhite ? 1 : -1);
+        }
+    }
+#endif
+    int eval = std::max(alpha, evaluator(*b, isWhite));
+    if (eval > beta) {
+        return eval;
+    }
 
+    double value = -std::numeric_limits<double>::infinity();
+    auto captures = b->pseudoLegalMoves(isWhite, true);
+    for (const auto &m : captures) {
+        auto undoInfo = b->make(m);
+        isWhite ^= true;
+        value = std::max(value, -searchCaptures(-beta, -alpha));
+        isWhite ^= true;
+        b->unmake(undoInfo, m);
+
+        if (value > beta) {
+            return value;
+        }
+        alpha = std::max(value, alpha);
+    }
+
+    return value;
+};
 
 
 double Searcher::scoreOf(double alpha, double beta) {
@@ -184,10 +215,6 @@ double Searcher::scoreOf(double alpha, double beta) {
         if (value >= beta) {
             // SNIP: Opponent has a better move that avoids this position
             // (which is too good for us)
-#if TRANSPOSITION_TABLE
-            std::lock_guard lg(*tableMtx);
-            transpositionTable->emplace(hash, std::make_pair(value * (isWhite ? 1 : -1), depth));
-#endif
             return value;
         }
 #endif
