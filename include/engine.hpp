@@ -23,6 +23,7 @@ public:
     // recursive, with parameters as part of the class to prevent
     // the call stack from growing excessively.
     double scoreOf(double alpha, double beta);
+    double searchCaptures(double alpha, double beta);
 
     std::unordered_map<uint64_t, std::pair<double, int>> *transpositionTable;
     std::mutex *tableMtx;

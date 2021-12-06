@@ -43,6 +43,7 @@ Move AbstractStockfishEngine::search(Board &b, bool isSideWhite) {
     std::string cmd = searchCommand;
     cmd.replace(cmd.find("{FEN}"), 5, b.getFen(isSideWhite));
 
+    std::cout << "CMD> " << cmd << std::endl;
     write(proc.to_child, cmd.data(), cmd.size());
 
     char reply[4097];
@@ -68,7 +69,7 @@ Move AbstractStockfishEngine::search(Board &b, bool isSideWhite) {
         reply[nbytes] = '\0';
         std::string line = std::string(reply);
 
-        // std::cout << reply;
+        std::cout << reply;
         if (lineReceived(line, mov)) return mov;
     }
 }

@@ -10,10 +10,10 @@
 // This probably affects deterministic multithreading too
 #define ALPHA_BETA_PRUNING 1
 
-#define SDEPTH 7
+#define SDEPTH 6
 
 // Disable transposition tables for (mostly) deterministic multithreading
-#define TRANSPOSITION_TABLE 1
+#define TRANSPOSITION_TABLE 0
 
 template <typename T>
 static inline T randOf(const std::vector<T> &vec) {
@@ -94,10 +94,16 @@ next:
 
 double defaultEvaluator(Board &b, bool side) {
     double acc = 0;
-    for (const BoardPosition i : b.whitePieces)
+    for (const BoardPosition i : b.whitePieces) {
         acc += valueOf(b.at(i).type) * (side ? 100 : -100);
-    for (const BoardPosition i : b.blackPieces)
+        if (side && b.at(i).type == PType::KING) acc += 9000 * 10; // their king is worth less!
+    }
+
+    for (const BoardPosition i : b.blackPieces) {
         acc += valueOf(b.at(i).type) * (side ? -100 : 100);
+        if (!side && b.at(i).type == PType::KING) acc += 9000 * 10; // our king is worth more! :)
+    }
+
     return acc;
 }
 
@@ -146,13 +152,39 @@ double enPassantEvaluator(Board &b, bool side) {
 }
 
 
+double Searcher::searchCaptures(double alpha, double beta) {
+    double value = evaluator(*b, isWhite);
+    if (value >= beta || alpha >= beta) {
+        return value;
+    }
+
+    auto caps = b->pseudoLegalMoves(isWhite, true);
+    for (const auto mov : caps) {
+        auto undo = b->make(mov);
+        isWhite ^= true;
+        value = std::max(-searchCaptures(-beta, -alpha), value);
+        isWhite ^= true;
+        b->unmake(undo, mov);
+
+        if (value >= beta) return value;
+        alpha = std::max(alpha, value);
+    }
+
+    return value;
+}
 
 
 double Searcher::scoreOf(double alpha, double beta) {
     // let alpha be the best score we can hope for now
     // beta is the worst score (for us) the opponent can hope for
 
-    if (depth <= 0) return evaluator(*b, isWhite);
+    // if (depth <= 0) return evaluator(*b, isWhite);
+    if (depth <= 0) {
+        isWhite ^= true;
+        auto ret = -searchCaptures(-alpha, -beta);
+        isWhite ^= true;
+        return ret;
+    }
 
 #if TRANSPOSITION_TABLE
     uint64_t hash = b->hash();

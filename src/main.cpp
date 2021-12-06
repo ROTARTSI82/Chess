@@ -24,8 +24,13 @@ int main(int argc, char **argv) {
     Board board{};
     board.dbgPrint();
 
-    MyEngine *whiteEngine = new MyEngine(defaultEvaluator);
-    MyEngine *blackEngine = new MyEngine(defaultEvaluator);
+    Engine *blackEngine = new MyEngine(defaultEvaluator);
+    Engine *whiteEngine = new StockfishEngine();
+    static_cast<StockfishEngine *>(whiteEngine)->searchCommand = // "setoption name Skill Level value 0\n"
+        "setoption name UCI_LimitStrength value true\n"
+        "setoption name UCI_Elo value 1400\n" // Change elo of stockfish here
+        "setoption name UCI_ShowWDL value true\n"
+        "position fen {FEN}\ngo movetime 250\n";
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
                                         SDL_WINDOWPOS_CENTERED,
@@ -88,7 +93,7 @@ int main(int argc, char **argv) {
                     for (const auto m : legalMoves)
                         found |= (m.dstCol == selected.col && m.dstRow == selected.row);
 
-                    if (!found) { // || board.rget(prev.row, prev.col).isWhite == false) {
+                    if (!found || board.rget(prev.row, prev.col).isWhite == false) {
                         std::cout << "Illegal move you idiot" << std::endl;
                         legalMoves.clear();
                         break;
@@ -104,9 +109,12 @@ int main(int argc, char **argv) {
                     undoCaps.push_back(board.make(mov));
                     undoMoves.push_back(mov);
                     legalMoves.clear();
+
+                    undoMoves.push_back(blackEngine->search(board, false));
+                    undoCaps.push_back(board.make(undoMoves.back()));
                 } else {
                     legalMoves.clear();
-                    // if (board.rget(selected.row, selected.col).isWhite)
+                    if (board.rget(selected.row, selected.col).isWhite)
                         board.collectMovesFor(selected.row, selected.col, legalMoves);
                 }
 
@@ -127,10 +135,16 @@ int main(int argc, char **argv) {
                     undoCaps.push_back(board.make(undoMoves.back()));
                     // toDraw = whiteEngine->line;
                     break;
+                case SDLK_g:
+                    undoMoves.push_back((turn ? whiteEngine : blackEngine)->search(board, turn));
+                    undoCaps.push_back(board.make(undoMoves.back()));
+                    turn ^= true;
+                    break;
                 case SDLK_BACKSPACE:
                     if (undoMoves.empty()) break;
                     board.unmake(undoCaps.back(), undoMoves.back());
                     undoCaps.pop_back(); undoMoves.pop_back();
+                    turn ^= true;
                     break;
                 case SDLK_s:
                     std::cout << "Black eval: " << swarmEvaluator(board, false) << std::endl;
