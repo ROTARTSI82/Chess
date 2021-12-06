@@ -10,7 +10,7 @@
 // This probably affects deterministic multithreading too
 #define ALPHA_BETA_PRUNING 1
 
-#define SDEPTH 6
+#define SDEPTH 7
 
 // Disable transposition tables for (mostly) deterministic multithreading
 #define TRANSPOSITION_TABLE 0
@@ -154,9 +154,12 @@ double enPassantEvaluator(Board &b, bool side) {
 
 double Searcher::searchCaptures(double alpha, double beta) {
     double value = evaluator(*b, isWhite);
-    if (value >= beta || alpha >= beta) {
+    if (value > beta || alpha > beta)
         return value;
-    }
+
+    // do i update alpha here? No, right?
+    // since it introduces some horizon effect?
+    // alpha = std::max(value, alpha);
 
     auto caps = b->pseudoLegalMoves(isWhite, true);
     for (const auto mov : caps) {
@@ -166,7 +169,7 @@ double Searcher::searchCaptures(double alpha, double beta) {
         isWhite ^= true;
         b->unmake(undo, mov);
 
-        if (value >= beta) return value;
+        if (value > beta) return value;
         alpha = std::max(alpha, value);
     }
 

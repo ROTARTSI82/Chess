@@ -24,9 +24,9 @@ int main(int argc, char **argv) {
     Board board{};
     board.dbgPrint();
 
-    Engine *blackEngine = new MyEngine(defaultEvaluator);
-    Engine *whiteEngine = new StockfishEngine();
-    static_cast<StockfishEngine *>(whiteEngine)->searchCommand = // "setoption name Skill Level value 0\n"
+    Engine *whiteEngine = new MyEngine(defaultEvaluator);
+    Engine *blackEngine = new StockfishEngine();
+    static_cast<StockfishEngine *>(blackEngine)->searchCommand = // "setoption name Skill Level value 0\n"
         "setoption name UCI_LimitStrength value true\n"
         "setoption name UCI_Elo value 1400\n" // Change elo of stockfish here
         "setoption name UCI_ShowWDL value true\n"
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
                     for (const auto m : legalMoves)
                         found |= (m.dstCol == selected.col && m.dstRow == selected.row);
 
-                    if (!found || board.rget(prev.row, prev.col).isWhite == false) {
+                    if (!found || board.rget(prev.row, prev.col).isWhite != false) {
                         std::cout << "Illegal move you idiot" << std::endl;
                         legalMoves.clear();
                         break;
@@ -110,11 +110,11 @@ int main(int argc, char **argv) {
                     undoMoves.push_back(mov);
                     legalMoves.clear();
 
-                    undoMoves.push_back(blackEngine->search(board, false));
+                    undoMoves.push_back(whiteEngine->search(board, true));
                     undoCaps.push_back(board.make(undoMoves.back()));
                 } else {
                     legalMoves.clear();
-                    if (board.rget(selected.row, selected.col).isWhite)
+                    if (!board.rget(selected.row, selected.col).isWhite)
                         board.collectMovesFor(selected.row, selected.col, legalMoves);
                 }
 
