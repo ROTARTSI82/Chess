@@ -10,7 +10,7 @@
 // This probably affects deterministic multithreading too
 #define ALPHA_BETA_PRUNING 1
 
-#define SDEPTH 6
+#define SDEPTH 5
 
 // Disable transposition tables for (mostly) deterministic multithreading
 #define TRANSPOSITION_TABLE 0
@@ -154,14 +154,17 @@ double enPassantEvaluator(Board &b, bool side) {
 
 double Searcher::searchCaptures(double alpha, double beta) {
     double value = evaluator(*b, isWhite);
-    if (value > beta || alpha > beta)
-        return value;
 
     // do i update alpha here? No, right?
     // since it introduces some horizon effect?
     // alpha = std::max(value, alpha);
 
     auto caps = b->pseudoLegalMoves(isWhite, true);
+    if (caps.empty()) return -std::numeric_limits<double>::infinity();
+
+    if (value > beta || alpha > beta)
+        return value + caps.size();
+
     for (const auto mov : caps) {
         auto undo = b->make(mov);
         isWhite ^= true;
@@ -182,12 +185,6 @@ double Searcher::scoreOf(double alpha, double beta) {
     // beta is the worst score (for us) the opponent can hope for
 
     // if (depth <= 0) return evaluator(*b, isWhite);
-    if (depth <= 0) {
-        isWhite ^= true;
-        auto ret = -searchCaptures(-alpha, -beta);
-        isWhite ^= true;
-        return ret;
-    }
 
 #if TRANSPOSITION_TABLE
     uint64_t hash = b->hash();
@@ -201,6 +198,12 @@ double Searcher::scoreOf(double alpha, double beta) {
 
     auto moves = b->pseudoLegalMoves(isWhite);
     if (moves.empty()) return -std::numeric_limits<double>::infinity();
+    if (depth <= 0) {
+        isWhite ^= true;
+        auto ret = -searchCaptures(-alpha, -beta) + moves.size();
+        isWhite ^= true;
+        return ret;
+    }
 
     double value = -std::numeric_limits<double>::infinity();
     std::vector<Move> line;

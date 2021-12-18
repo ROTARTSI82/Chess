@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+#define EN_PASSANTS_LEGAL 0
+
 
 Piece::Piece() : type(PType::NIL), isWhite(false), moveState(MoveState::NOT_MOVED), isPassant(false) {};
 Piece::Piece(PType t, bool white) : type(t), isWhite(white), moveState(MoveState::NOT_MOVED), isPassant(false) {};
@@ -257,6 +259,7 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
             ret.push_back(mov);
         }
 
+#if EN_PASSANTS_LEGAL
         if (c + 1 < 8) {
             if (rget(lRow, c + 1).exists() && rget(lRow, c + 1).isWhite != rget(r,c).isWhite) {
                 Move mov = Move{{r, c}, {lRow, (uint8_t) (c + 1)}};
@@ -304,6 +307,7 @@ void Board::collectMovesFor(uint8_t r, uint8_t c, std::vector<Move> &ret, bool O
                 ret.emplace_back(consider);
             }
         }
+#endif
         break;
     }
     case (PType::KNIGHT): {
@@ -371,6 +375,27 @@ std::vector<Move> Board::pseudoLegalMoves(bool doWhite, bool ONLY_CAP) {
 
     for (const BoardPosition i : (doWhite ? whitePieces : blackPieces))
         collectMovesFor(i.row, i.col, ret, ONLY_CAP);
+
+    // illegal en passants still exists.
+    // hacky solution to fix checks
+    std::remove_if(ret.begin(), ret.end(), [&](Move m) -> bool {
+        bool ret = false;
+        auto undo = make(m);
+
+        std::vector<Move> caps;
+        for (const BoardPosition i : (doWhite ? blackPieces : whitePieces))
+            collectMovesFor(i.row, i.col, caps, true);
+
+        for (const auto cap : caps) {
+            if (rget(cap.dstRow, cap.dstCol).type == PType::KING) {
+                ret = true;
+                break;
+            }
+        }
+
+        unmake(undo, m);
+        return ret;
+    });
 
     std::sort(ret.begin(), ret.end(), [](Move a, Move b) {
         return a.rank > b.rank;

@@ -220,5 +220,24 @@ private:
 };
 
 inline std::string toStr(Move m) {
-    return (char) (m.srcCol + 'a') + std::string("") + std::to_string((int) 8 -m.srcRow) + (char) (m.dstCol + 'a') + "" + std::to_string((int) 8-m.dstRow);
+    std::string append = "";
+    if (m.doPromote) {
+        switch (m.promoteTo) {
+            case PromoteType::ROOK:
+                append = "r";
+                break;
+            case PromoteType::KNIGHT:
+                append = "n";
+                break;
+            case PromoteType::BISHOP:
+                append = "b";
+                break;
+            default:
+            case PromoteType::QUEEN:
+                append = "q";
+                break;
+        }
+    }
+
+    return (char) (m.srcCol + 'a') + std::string("") + std::to_string((int) 8 -m.srcRow) + (char) (m.dstCol + 'a') + "" + std::to_string((int) 8-m.dstRow) + append;
 }
