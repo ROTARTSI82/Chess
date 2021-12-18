@@ -22,15 +22,15 @@ int main(int argc, char **argv) {
     std::cout << "Sizeof (move) = " << sizeof(Move) << std::endl;
 
     Board board{};
-    board.dbgPrint();
+    board.dbgPrint(std::cout);
 
     Engine *whiteEngine = new MyEngine(defaultEvaluator);
     Engine *blackEngine = new StockfishEngine();
-    static_cast<StockfishEngine *>(blackEngine)->searchCommand = // "setoption name Skill Level value 0\n"
-        "setoption name UCI_LimitStrength value true\n"
-        "setoption name UCI_Elo value 1400\n" // Change elo of stockfish here
-        "setoption name UCI_ShowWDL value true\n"
-        "position fen {FEN}\ngo movetime 250\n";
+    // static_cast<StockfishEngine *>(blackEngine)->searchCommand = // "setoption name Skill Level value 0\n"
+    //     "setoption name UCI_LimitStrength value true\n"
+    //     "setoption name UCI_Elo value 1400\n" // Change elo of stockfish here
+    //     "setoption name UCI_ShowWDL value true\n"
+    //     "position fen {FEN}\ngo movetime 250\n";
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
                                         SDL_WINDOWPOS_CENTERED,
@@ -167,6 +167,11 @@ int main(int argc, char **argv) {
         for (const auto i : toDraw) {
             // if (board.rget(i.srcRow, i.srcCol).type == PType::KING)
             SDL_RenderDrawLine(rend, i.srcCol * w/8 + w/16, i.srcRow * h/8 + h/16, i.dstCol * w/8 + w/16, i.dstRow * h/8 + h/16);
+        }
+
+        for (int i = undoMoves.size() - 2; i > 0 && i < undoMoves.size(); i++) {
+            auto m = undoMoves[i];
+            SDL_RenderDrawLine(rend, m.srcCol * w/8 + w/16, m.srcRow * h/8 + h/16, m.dstCol * w/8 + w/16, m.dstRow * h/8 + h/16);
         }
 
         SDL_Rect moveDst = {0, 0, w / 8, h / 8};

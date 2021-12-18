@@ -144,10 +144,18 @@ public:
     }
 
     inline Piece &rget(uint8_t row, uint8_t col) {
+        /**
+         * 8 - rank = row
+         * file - 'a' = col
+         * 
+         * file = col + 'a'
+         * rank = 8 - row
+         * 
+         */
         return board[row * 8 + col];
     }
 
-    void dbgPrint();
+    void dbgPrint(std::ostream &out);
     
     std::string getFen(bool sideWhite = false);
 
@@ -211,3 +219,6 @@ private:
     std::mt19937 rng = std::mt19937(dev());
 };
 
+inline std::string toStr(Move m) {
+    return (char) (m.srcCol + 'a') + std::string("") + std::to_string((int) 8 -m.srcRow) + (char) (m.dstCol + 'a') + "" + std::to_string((int) 8-m.dstRow);
+}

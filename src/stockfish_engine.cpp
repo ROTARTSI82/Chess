@@ -34,7 +34,22 @@ void AbstractStockfishEngine::moveFromAlgebraic(const std::string &mov, Move &st
     if (b.rget(store.srcRow, store.srcCol).type == PType::PAWN 
         && (store.dstRow == 0 || store.dstRow == 7)) {
         store.doPromote = true;
-        store.promoteTo = PromoteType::QUEEN;
+        char promoteTo = tolower(mov.at(mov.size() - 1));
+        switch (promoteTo) {
+            case 'r':
+                store.promoteTo = PromoteType::ROOK;
+                break;
+            case 'b':
+                store.promoteTo = PromoteType::BISHOP;
+                break;
+            case 'n':
+            case 'k': // interpret k as being equal to n in case ppl are stupid
+                store.promoteTo = PromoteType::KNIGHT;
+                break;
+            case 'q':
+            default:
+                store.promoteTo = PromoteType::QUEEN;
+        }
     }
 }
 

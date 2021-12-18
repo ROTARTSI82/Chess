@@ -10,7 +10,7 @@
 // This probably affects deterministic multithreading too
 #define ALPHA_BETA_PRUNING 1
 
-#define SDEPTH 7
+#define SDEPTH 6
 
 // Disable transposition tables for (mostly) deterministic multithreading
 #define TRANSPOSITION_TABLE 0
@@ -295,7 +295,7 @@ Move MyEngine::search(Board &bor, bool sideIsWhite) {
 
                 cpy.unmake(undo, moves.at(j));
                 auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin);
-                std::cout << "Search took (milliseconds): " << diff.count() << std::endl;
+                // std::cout << "Search took (milliseconds): " << diff.count() << std::endl;
             }
             
         }));
@@ -304,7 +304,7 @@ Move MyEngine::search(Board &bor, bool sideIsWhite) {
     for (int i = 0; i < workers; i++)
         threads.at(i).join();
     
-    std::cout << table.size() << " items cached. Current score of " << alpha << " with " << candidates.size() << " candidates" << std::endl;
+    // std::cout << table.size() << " items cached. Current score of " << alpha << " with " << candidates.size() << " candidates" << std::endl;
 
     // TODO: Choose good selector function! It matters
     auto sel = std::max_element(candidates.begin(), candidates.end(), [&](Move a, Move b) -> bool {

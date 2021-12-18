@@ -15,7 +15,9 @@ find_package(SDL2_image REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
 include_directories(${SDL2_IMAGE_INCLUDE_DIR})
 
-add_executable(Chess src/main.cpp src/chess.cpp src/stockfish_engine.cpp src/popen2.cpp src/engine.cpp)
+set(ETC_CPP src/chess.cpp src/stockfish_engine.cpp src/popen2.cpp src/engine.cpp)
+
+add_executable(Chess src/main.cpp ${ETC_CPP})
 target_include_directories(Chess PUBLIC include src)
 target_link_libraries(Chess ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY} ${SDL2_IMAGE_LIBRARY})
 # target_include_directories(Chess PUBLIC dep/SDL/include dep/SDL_image)
@@ -26,3 +28,9 @@ project(ConnectFour)
 add_executable(ConnectFour src/connect4/c4_main.cpp src/connect4/connect4.cpp src/connect4/neural_net.cpp)
 target_include_directories(ConnectFour PUBLIC include src)
 target_link_libraries(ConnectFour ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY} ${SDL2_IMAGE_LIBRARY})
+
+
+project(UCIChess)
+add_executable(UCIChess src/uci.cpp ${ETC_CPP})
+target_include_directories(UCIChess PUBLIC include src)
+target_link_libraries(UCIChess ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY} ${SDL2_IMAGE_LIBRARY})

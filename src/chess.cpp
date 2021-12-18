@@ -18,7 +18,7 @@ uint64_t Board::zobristTable[64][12];
 Board::Board() {
     for (int i = 0; i < 64; i++) board[i] = Piece();
 
-    std::cout << "Init board" << std::endl;
+    // std::cout << "Init board" << std::endl;
 
     for (char r = 'a'; r <= 'h'; r++) {
         get(r, 2) = Piece(PType::PAWN, true);
@@ -379,16 +379,16 @@ std::vector<Move> Board::pseudoLegalMoves(bool doWhite, bool ONLY_CAP) {
     return ret;
 }
 
-void Board::dbgPrint() {
+void Board::dbgPrint(std::ostream &out) {
     for (int rank = 8; rank > 0; rank--) {
-        std::cout << rank << "\t";
+        out << rank << "\t";
         for (char file = 'a'; file <= 'h'; file++){
             if (get(file, rank).exists()) {
-                std::cout << get(file, rank).toString();
-            } else std::cout << "-";
-            std::cout << "\t";
+                out << get(file, rank).toString();
+            } else out << "-";
+            out << "\t";
         }
-        std::cout << std::endl;
+        out << std::endl;
     }
 }
 

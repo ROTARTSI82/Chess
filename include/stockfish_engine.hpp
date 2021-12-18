@@ -11,7 +11,7 @@ public:
     virtual bool lineReceived(const std::string &line, Move &selected) = 0;
     virtual void resetSearch(Board &b, bool isSideWhite) = 0;
 
-    void moveFromAlgebraic(const std::string &mov, Move &store, Board &b);
+    static void moveFromAlgebraic(const std::string &mov, Move &store, Board &b);
 
     std::string searchCommand = "setoption name UCI_Elo value 2850\nposition fen {FEN}\ngo movetime 1000\n";
     struct popen2 proc;
