@@ -1,0 +1,5 @@
+build/
+.vscode/
+Chess/
+dep/magic-reference/
+misc/

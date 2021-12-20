@@ -1,5 +1,5 @@
 mkdir build
 cd build
-cmake ..
+cmake -DCMAKE_C_COMPILER=$(which gcc) -DCMAKE_CXX_COMPILER=$(which g++) ..
 cmake --build .
 

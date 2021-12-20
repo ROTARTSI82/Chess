@@ -3,13 +3,14 @@
 #include <exception>
 #include <stdexcept>
 
+#include <array>
+
 namespace sc {
 
     void print_bb(const Bitboard b) {
-        Square cursor = 0;
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
-                std::cout << '\t' << (b & to_bitboard(cursor++) ? '1' : '0');
+        for (int rank = 8; rank > 0; rank--) {
+            for (char file = 'a'; file < 'i'; file++) {
+                std::cout << ' ' << (b & to_bitboard(make_square(file, rank)) ? 'X' : '.');
             }
             std::cout << '\n';
         }
@@ -57,25 +58,30 @@ namespace sc {
         // find the first fen char
         while (!is_fen_char(fen.at(++i)));
 
-        Square cursor = 0;
+        uint8_t cursor = 0;
         while (cursor < 64) {
             char c = fen.at(i++);
             if (is_number(c))
                 cursor += c - '0';
             else if (c == '/') continue;
-            else
-                set(cursor++, type_from_char(c), isupper(c) ? WHITE_SIDE : BLACK_SIDE);
+            else {
+                Square toSet = 56 - cursor/8*8 + cursor%8;
+                set(toSet, type_from_char(c), isupper(c) ? WHITE_SIDE : BLACK_SIDE);
+                cursor++;
+            }
         }
 
         i++; // skip the space
         turn = fen.at(i++) == 'w' ? WHITE_SIDE : BLACK_SIDE;
 
-        for (int s = 0; s < NUM_SIDES; s++) for (int mode = 0; mode < NUM_CASTLES; mode++) castlingRights[s][mode] = false;
+        castlingRights = 0;
         char castling = fen.at(++i); // skip space and get next char
         if (castling != '-') {
             while (fen.at(i) != ' ') {
                 char c = fen.at(i++);
-                castlingRights[isupper(c) ? WHITE_SIDE : BLACK_SIDE][tolower(c) == 'k' ? KINGSIDE : QUEENSIDE] = true;
+                uint8_t whichBit = tolower(c) == 'k' ? KINGSIDE_MASK : QUEENSIDE_MASK;
+                if (isupper(c)) whichBit <<= 2; // white gets left shifted
+                castlingRights |= whichBit;
             }
         }
 
@@ -103,9 +109,9 @@ namespace sc {
 
         int emptySpaces = 0;
 
-        for (uint8_t row = 0; row < 8; row++) {
-            for (uint8_t col = 0; col < 8; col++) {
-                const auto value = pieces[make_square(row, col)];
+        for (uint8_t rank = 8; rank > 0; rank--) {
+            for (char file = 'a'; file < 'i'; file++) {
+                const auto value = pieces[make_square(file, rank)];
                 if (value == NULL_COLORED_TYPE) emptySpaces++;
                 else {
                     if (emptySpaces) {
@@ -120,21 +126,25 @@ namespace sc {
             emptySpaces = 0;
 
             // omit appending / for the last one
-            if (row != 7) ret += '/';
+            if (rank != 1) ret += '/';
         }
 
         ret += ' ';
         ret += (turn == WHITE_SIDE) ? 'w' : 'b';
         ret += ' ';
 
+        enum CastlingType {
+            BLACK_QUEENSIDE = QUEENSIDE_MASK, BLACK_KINGSIDE = KINGSIDE_MASK,
+            WHITE_QUEENSIDE = QUEENSIDE_MASK << 2, WHITE_KINGSIDE = KINGSIDE_MASK << 2
+        };
+
         bool nobodyCanCastle = true;
-        for (int side = 0; side < NUM_SIDES; side++)
-            for (int castleMode = 0; castleMode < NUM_CASTLES; castleMode++)
-                if (castlingRights[side][castleMode]) {
-                    nobodyCanCastle = false;
-                    ret += ((castleMode == KINGSIDE ? 'K' : 'Q') 
-                           + (side == BLACK_SIDE ? 'a' - 'A' : 0)); // make lowercase for black
-                }
+        constexpr std::array<std::pair<uint8_t, char>, 4> castleTable = {{
+            {WHITE_KINGSIDE, 'K'}, {WHITE_QUEENSIDE, 'Q'}, {BLACK_KINGSIDE, 'k'}, {BLACK_QUEENSIDE, 'q'},
+        }};
+
+        for (const auto &way : castleTable)
+            if (castlingRights & way.first) { ret += way.second; nobodyCanCastle = false; }
         if (nobodyCanCastle) ret += '-';
 
         ret += ' ';
