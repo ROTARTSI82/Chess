@@ -4,8 +4,8 @@ set (CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(Scacus)
-add_compile_options(-std=c++2a -Wall -Wextra -Wpedantic -g3 -fsanitize=address -fno-omit-frame-pointer)
-add_link_options(-std=c++2a -Wall -Wextra -Wpedantic -g3 -fsanitize=address -fno-omit-frame-pointer)
+add_compile_options(-Ofast -std=c++2a -Wall -Wextra -Wpedantic -g3 -fsanitize=address -fno-omit-frame-pointer)
+add_link_options(-Ofast -std=c++2a -Wall -Wextra -Wpedantic -g3 -fsanitize=address -fno-omit-frame-pointer)
 
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)

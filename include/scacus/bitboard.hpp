@@ -92,6 +92,8 @@ namespace sc {
         BLACK_SIDE = 0, WHITE_SIDE = 1, NUM_SIDES
     };
 
+    inline constexpr Side opposite_side(const Side s) { return static_cast<Side>((uint8_t) s ^ 1); }
+
     inline constexpr ColoredType make_ColoredType(const Type t, const Side s) {
         return static_cast<ColoredType>((int) t | (s == WHITE_SIDE ? 8 : 0));
     }
@@ -126,16 +128,24 @@ namespace sc {
         MoveType typeFlags : 2;
     };
 
-    typedef std::vector<Move> MoveList;
+    template <MoveType TYPE>
+    constexpr inline Move make_move(const Square from, const Square to) { return Move{from, to, PROMOTE_QUEEN, TYPE}; }
+    constexpr inline Move make_normal(const Square from, const Square to) { return make_move<NORMAL>(from, to); }
+    constexpr inline Move make_promotion(const Square from, const Square to, const PromoteType promote) { return Move{from, to, promote, PROMOTION}; }
+
+    // info about a position that we would like to store separately for move undo
+    struct StateInfo {
+        // Bitboard pinned[NUM_SIDES]; // pinned pieces
+
+        CastlingRights castlingRights;
+        Square enPassantTarget = NULL_SQUARE;
+    };
 
     class Position {
     public:
         explicit Position(const std::string &fen, int *store = nullptr); // store: Used to store the index into the string that we read to
         Position() : Position(std::string{STARTING_POS_FEN}) {};
         std::string get_fen();
-
-        // movegen.cpp
-        MoveList legal_moves();
 
         inline void set(const Square p, const Type type, const Side side) {
             pieces[p] = make_ColoredType(type, side);
@@ -149,17 +159,35 @@ namespace sc {
             pieces[p] = NULL_COLORED_TYPE;
         }
 
+        constexpr inline Bitboard by_side(const Side c) const { return byColor[c]; }
+        constexpr inline Bitboard by_type(const Type t) const { return byType[t]; }
+
     public:
         int halfmoves = 0; // number of plies since a capture or pawn advance
         int fullmoves = 1; // increment every time black moves
 
-        Side turn = WHITE_SIDE;
-
-        CastlingRights castlingRights;
-        Square enPassantTarget = NULL_SQUARE;
-
         ColoredType pieces[BOARD_SIZE];
         Bitboard byColor[NUM_SIDES]; // black = 0 white = 1
         Bitboard byType[NUM_UNCOLORED_PIECE_TYPES];
+
+        StateInfo state;
+        Side turn = WHITE_SIDE;
     };
+
+    // generates a random number with a seed input, which it updates in place
+    // see xorshift64. Useful for deterministic results when selecting magics.
+    constexpr inline uint64_t rand_u64(uint64_t &x) {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        return x;
+    }
+
+    // returns the index of the least significant bit and sets it to 0
+    constexpr inline int pop_lsb(uint64_t &x) {
+        auto ret = std::__countr_zero(x);
+        x ^= (1ULL << ret); // flip that bit (sets to 0)
+        return ret;
+    }
+
 }

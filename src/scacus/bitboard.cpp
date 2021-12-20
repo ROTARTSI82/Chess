@@ -53,6 +53,9 @@ namespace sc {
         for (int i = 0; i < NUM_UNCOLORED_PIECE_TYPES; i++) byType[i] = 0;
         for (int i = 0; i < NUM_SIDES; i++) byColor[i] = 0;
 
+        // for (int i = 0; i < NUM_SIDES; i++) state.pinned[i] = 0;
+        // for (int i = 0; i < NUM_UNCOLORED_PIECE_TYPES; i++) state.attackedSquares[i] = 0;
+
         int i = -1;
 
         // find the first fen char
@@ -74,22 +77,22 @@ namespace sc {
         i++; // skip the space
         turn = fen.at(i++) == 'w' ? WHITE_SIDE : BLACK_SIDE;
 
-        castlingRights = 0;
+        state.castlingRights = 0;
         char castling = fen.at(++i); // skip space and get next char
         if (castling != '-') {
             while (fen.at(i) != ' ') {
                 char c = fen.at(i++);
                 uint8_t whichBit = tolower(c) == 'k' ? KINGSIDE_MASK : QUEENSIDE_MASK;
                 if (isupper(c)) whichBit <<= 2; // white gets left shifted
-                castlingRights |= whichBit;
+                state.castlingRights |= whichBit;
             }
         }
 
         if (fen.at(++i) != '-') { // skip over space and get next char
-            enPassantTarget = make_square(fen.at(i), fen.at(i + 1) - '0');
+            state.enPassantTarget = make_square(fen.at(i), fen.at(i + 1) - '0');
             i++;
         } else {
-            enPassantTarget = NULL_SQUARE;
+            state.enPassantTarget = NULL_SQUARE;
         }
 
         i += 2; // skip both '-' AND space
@@ -144,11 +147,11 @@ namespace sc {
         }};
 
         for (const auto &way : castleTable)
-            if (castlingRights & way.first) { ret += way.second; nobodyCanCastle = false; }
+            if (state.castlingRights & way.first) { ret += way.second; nobodyCanCastle = false; }
         if (nobodyCanCastle) ret += '-';
 
         ret += ' ';
-        ret += (enPassantTarget != NULL_SQUARE ? sq_to_str(enPassantTarget) : "-");
+        ret += (state.enPassantTarget != NULL_SQUARE ? sq_to_str(state.enPassantTarget) : "-");
         ret += ' ';
         ret += std::to_string(halfmoves);
         ret += ' ';
