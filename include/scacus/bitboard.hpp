@@ -68,6 +68,7 @@ namespace sc {
     }
 
     inline constexpr Bitboard to_bitboard(const Square s) { return 1ULL << s; }
+    inline constexpr Bitboard bb_rank_file(char file, int rank) { return to_bitboard(make_square(file, rank)); }
 
     enum Type : uint8_t {
         NULL_TYPE = 0,
@@ -116,16 +117,39 @@ namespace sc {
         PROMOTE_QUEEN = 0, PROMOTE_ROOK, PROMOTE_BISHOP, PROMOTE_KNIGHT
     };
 
+    // squares to check if we are under attack in for castling
+    // 0 = black queenside 1 = black kingside
+    // 2 = white queenside 3 = white kingside
+    constexpr Bitboard CASTLING_ATTACK_MASKS[] = {
+        bb_rank_file('c', 8) | bb_rank_file('d', 8), // black queenside
+        bb_rank_file('f', 8) | bb_rank_file('g', 8), // black kingside
+        bb_rank_file('c', 1) | bb_rank_file('d', 1), // white queenside
+        bb_rank_file('f', 1) | bb_rank_file('g', 1) // white kingside
+    };
+
+    constexpr Bitboard CASTLING_OCCUPANCY_MASKS[] = {
+        bb_rank_file('b', 8) | CASTLING_ATTACK_MASKS[0],
+        CASTLING_ATTACK_MASKS[1],
+        bb_rank_file('b', 1) | CASTLING_ATTACK_MASKS[2],
+        CASTLING_ATTACK_MASKS[3]
+    };
+
     enum MoveType : uint8_t {
         NORMAL = 0, PROMOTION, EN_PASSANT, CASTLE
     };
 
     // see https://github.com/official-stockfish/Stockfish/blob/0a318cdddf8b6bdd05c2e0ee9b3b61a031d398ed/src/types.h#L112
     struct Move {
-        Square dst : 6;
         Square src : 6;
+        Square dst : 6;
         PromoteType promote : 2;
         MoveType typeFlags : 2;
+
+        inline std::string long_alg_notation() const {
+            std::string ret = sq_to_str(src) + sq_to_str(dst);
+            if (typeFlags == PROMOTION) ret += type_to_char(static_cast<Type>((int) promote + 2));
+            return ret;
+        }
     };
 
     template <MoveType TYPE>
@@ -139,6 +163,7 @@ namespace sc {
 
         CastlingRights castlingRights;
         Square enPassantTarget = NULL_SQUARE;
+        ColoredType capturedPiece = NULL_COLORED_TYPE;
     };
 
     class Position {

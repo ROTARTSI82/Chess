@@ -4,54 +4,93 @@
 
 #include <chrono>
 
+struct PerftInfo {
+    int nodes = 0;
+    int castles = 0;
+    int promotions = 0;
+    int captures = 0;
+    int enPassants = 0;
+};
+
+int perft_worker(sc::Position &p, int depth, PerftInfo &store) {
+    if (depth == 0)
+        return 1;
+    
+
+    int tot = 0;
+    // std::cout << "legals call\n";
+    sc::MoveList legals = p.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(p) : sc::standard_moves<sc::BLACK_SIDE>(p);
+    // std::cout << "legals call\n";
+
+    for (const auto &m : legals) {
+        if (m.typeFlags == sc::PROMOTION) store.promotions++;
+        if (m.typeFlags == sc::EN_PASSANT) { store.enPassants++; store.captures++; }
+        if (m.typeFlags == sc::CASTLE) store.castles++;
+        if (p.pieces[m.dst] != sc::NULL_COLORED_TYPE) store.captures++;
+
+        sc::Position cpy = p;
+        sc::make_move(cpy, m);
+        tot += perft_worker(cpy, depth - 1, store);
+    }
+
+    return tot;
+}
+
+void perft(const std::string &fen, int depth) {
+    sc::Position pos{fen};
+    PerftInfo p;
+    // std::cout << "first legals call\n";
+    sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
+    // std::cout << "past first legals call\n";
+    for (const auto &m : legals) {
+        sc::Position cpy = pos;
+        sc::make_move(cpy, m);
+        int res = perft_worker(cpy, depth, p);
+        p.nodes += res;
+        std::cout << m.long_alg_notation() << " - " << res << '\n';
+    }
+
+    std::cout << "Total on depth " << depth << " = " << p.nodes << "\n";
+    std::cout << "captures " << p.captures << '\n';
+    std::cout << "en passants " << p.enPassants << '\n';
+    std::cout << "castles " << p.castles << '\n';
+    std::cout << "promotions " << p.promotions << '\n';
+    std::cout << "\n\n\n";
+}
+
+
+uint64_t Perft(int depth, sc::Position &pos)
+{
+  sc::Move move_list[256];
+  int n_moves, i;
+  uint64_t nodes = 0;
+
+  if (depth == 0) 
+    return 1ULL;
+
+//   std::cout << "legal moves\n";
+  sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
+
+//   std::cout << "end moves\n";
+  for (auto m : legals) {
+    sc::Position cpy = pos;
+
+    // std::cout << "make move\n";
+    sc::make_move(cpy, m);
+//   std::cout << "end make move\n";
+    nodes += Perft(depth - 1, cpy);
+
+  }
+  return nodes;
+}
+
+
 int main(int argc, char **argv) {
     auto start = std::chrono::high_resolution_clock::now();
     sc::init_movegen();
     auto dur = std::chrono::high_resolution_clock::now() - start;
 
     std::cout << "Magic brute-forcing took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(dur).count() << "ms\n"; 
-
-    while (true) {
-        std::cout << "Enter Coord> ";
-        std::string line;
-        std::getline(std::cin, line);
-
-        if (line == "quit") return 0;
-
-
-        sc::Square sq = sc::make_square(line.at(0), line.at(1) - '0');
-        std::cout << "sq = " << std::to_string(sq) << " to_str = " << sc::sq_to_str(sq) << std::endl;
-        std::cout << "RANK " << (int)sc::rank_ind_of(sq) << " FILE " << (int)sc::file_ind_of(sq) << std::endl;
-
-        sc::print_bb(sc::file_bb(line.at(0)) | sc::rank_bb(line.at(1) - '0'));
-        
-        std::cout << "\n\nKNIGHTS\n";
-        sc::print_bb(sc::KNIGHT_MOVES[sq]);
-        std::cout << "\n\nKINGS\n";
-        sc::print_bb(sc::KING_MOVES[sq]);
-        std::cout << "\n\nBLACK PAWN ATTACKS\n";
-        sc::print_bb(sc::PAWN_ATTACKS[sc::BLACK_SIDE][sq]);
-        std::cout << "\n\nWHITE PAWN ATTACKS\n";
-        sc::print_bb(sc::PAWN_ATTACKS[sc::WHITE_SIDE][sq]);
-        std::cout << "\n\nBLACK PAWN MOVES\n";
-        sc::print_bb(sc::PAWN_MOVES[sc::BLACK_SIDE][sq]);
-        std::cout << "\n\nWHITE PAWN MOVES\n";
-        sc::print_bb(sc::PAWN_MOVES[sc::WHITE_SIDE][sq]);
-
-        std::cout << "\n\nBISHOP OCCUPANCY MASK (SHIFT=" << (int) sc::BISHOP_MAGICS[sq].shift << ")\n";
-        sc::print_bb(sc::BISHOP_MAGICS[sq].mask);
-
-        std::cout << "\n\nROOK OCCUPANCY MASK (SHIFT=" << (int) sc::ROOK_MAGICS[sq].shift << ")\n";
-        sc::print_bb(sc::ROOK_MAGICS[sq].mask);
-
-        std::cout << "\n\nROOK ATTACKS (NO OCCUPIED)\n";
-        sc::print_bb(sc::lookup<sc::ROOK_MAGICS>(sq, 0));
-
-
-        std::cout << "\n\nBISHOP ATTACKS (NO OCCUPIED)\n";
-        sc::print_bb(sc::lookup<sc::BISHOP_MAGICS>(sq, 0));
-    }
-
 
     std::cout << "Hello World!\n";
     while (true) {
@@ -60,25 +99,9 @@ int main(int argc, char **argv) {
         std::getline(std::cin, line);
         if (line == "quit") break;
 
-        sc::Position p{line};
-        std::cout << "FEN: " << p.get_fen() << '\n';
-
-        std::cout << "\n\nWhite: \n"; 
-        sc::print_bb(p.byColor[sc::WHITE_SIDE]);
-        std::cout << "\n\nBlack: \n";
-        sc::print_bb(p.byColor[sc::BLACK_SIDE]);
-
-        std::cout << "\n\nPawns:\n";
-        sc::print_bb(p.byType[sc::PAWN]);
-        std::cout << "\n\nBishops:\n";
-        sc::print_bb(p.byType[sc::BISHOP]);
-        std::cout << "\n\nKnights:\n";
-        sc::print_bb(p.byType[sc::KNIGHT]);
-        std::cout << "\n\nRooks:\n";
-        sc::print_bb(p.byType[sc::ROOK]);
-        std::cout << "\n\nQueens:\n";
-        sc::print_bb(p.byType[sc::QUEEN]);
-        std::cout << "\n\nKings:\n";
-        sc::print_bb(p.byType[sc::KING]);
+        sc::Position pos{line};
+        for (int i = 1; i < 8; i++) {
+            std::cout << "perft(" << i << ") = " << Perft(i, pos) << '\n';
+        }
     }
 }

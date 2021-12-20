@@ -44,17 +44,20 @@ namespace sc {
 
     void init_movegen();
 
+    StateInfo make_move(Position &pos, const Move mov);
+
     typedef std::vector<Move> MoveList;
 
 #define ADD_MOVES() while (attk) ret.push_back(make_normal(sq, pop_lsb(attk)))
 
-#define ADD_IF_RESOLVES_CHECK() while (attk) { \
+#define IF_RESOLVES_CHECK(action) while (attk) { \
     Square _dstsq = pop_lsb(attk); \
     Bitboard testOcc = occ; \
     testOcc ^= to_bitboard(sq); \
     testOcc |= to_bitboard(_dstsq); \
-    if (check_resolved(pos, testOcc, checkers, kingBB)) \
-        ret.push_back(make_normal(sq, _dstsq)); \
+    if (check_resolved(pos, testOcc, checkers, kingBB)) { \
+        action; \
+    } \
 }
 
 #define ADD_OTHER_SIDE_THREATS() if (tmpAtk & kingBB) { \
@@ -69,7 +72,7 @@ namespace sc {
 
     // checks if there is no check given by checker with the given occupancy bits
     static constexpr inline bool check_resolved(const Position &pos, const Bitboard occ, const Bitboard checker, const Bitboard kingBB) {
-        Square sq = std::countr_zero<uint64_t>(checker);
+        Square sq = std::__countr_zero<uint64_t>(checker);
         switch (type_of(pos.pieces[sq])) {
         case QUEEN:
             return (lookup<BISHOP_MAGICS>(sq, occ) | lookup<ROOK_MAGICS>(sq, occ)) & kingBB;
@@ -82,6 +85,7 @@ namespace sc {
         }
     }
 
+    // Assumption: You can't en passant and promote at the same time.
     template <Side SIDE>
     MoveList standard_moves(const Position &pos) {
         MoveList ret;
@@ -150,7 +154,6 @@ namespace sc {
             bool done = false;
             while (pinnerIter && !done) {
                 Square pinnerSq = pop_lsb(pinnerIter);
-                Bitboard pinnerBb = to_bitboard(pinnerSq);
                 switch (type_of(pos.pieces[pinnerSq])) {
                 case BISHOP:
                     if (lookup<BISHOP_MAGICS>(pinnerSq, maybePinned) & kingBB) {
@@ -169,6 +172,7 @@ namespace sc {
                         pinned |= bb;
                         done = true;
                     }
+                    break;
                 default:
                     throw std::runtime_error{"Non bishop/rook/queene pinner?"};
                 }
@@ -190,19 +194,19 @@ namespace sc {
                     switch (type_of(pos.pieces[sq])) {
                     case KNIGHT:
                         attk = KNIGHT_MOVES[sq] & landingSquares;
-                        ADD_IF_RESOLVES_CHECK();
+                        IF_RESOLVES_CHECK(ret.push_back(make_normal(sq, _dstsq)));
                         break;
                     case QUEEN:
                         attk = (lookup<ROOK_MAGICS>(sq, occ) | lookup<BISHOP_MAGICS>(sq, occ)) & landingSquares;
-                        ADD_IF_RESOLVES_CHECK();
+                        IF_RESOLVES_CHECK(ret.push_back(make_normal(sq, _dstsq)));
                         break;
                     case BISHOP:
                         attk = lookup<BISHOP_MAGICS>(sq, occ) & landingSquares;
-                        ADD_IF_RESOLVES_CHECK();
+                        IF_RESOLVES_CHECK(ret.push_back(make_normal(sq, _dstsq)));
                         break;
                     case ROOK:
                         attk = lookup<ROOK_MAGICS>(sq, occ) & landingSquares;
-                        ADD_IF_RESOLVES_CHECK();
+                        IF_RESOLVES_CHECK(ret.push_back(make_normal(sq, _dstsq)));
                         break;
                     case KING:
                         // ignore the king. it's handled down below
@@ -230,7 +234,14 @@ namespace sc {
                         
                         // add moves
                         attk = PAWN_MOVES[SIDE][sq] & landingSquares;
-                        ADD_IF_RESOLVES_CHECK();
+                        IF_RESOLVES_CHECK({
+                            if ((0 <= _dstsq && _dstsq <= 7) || (56 <= _dstsq && _dstsq <= 63)) {
+                                for (PromoteType to : {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK})
+                                    ret.push_back(make_promotion(sq, _dstsq, to));
+                            } else {
+                                ret.push_back(make_normal(sq, _dstsq));
+                            }
+                        });
                         break;
                     }
                     default:
@@ -270,7 +281,26 @@ namespace sc {
             case KING: {
                 attk = KING_MOVES[sq] & ~pos.by_side(SIDE) & ~underFire;
                 ADD_MOVES();
-                // add castling here
+
+                static_assert(SIDE == WHITE_SIDE || SIDE == BLACK_SIDE);
+                constexpr auto sideIndex = (SIDE == WHITE_SIDE ? 2 : 0);
+                bool canKingside = pos.state.castlingRights & KINGSIDE_MASK << sideIndex;
+                bool canQueenside = pos.state.castlingRights & QUEENSIDE_MASK << sideIndex;
+
+                constexpr Bitboard checkMaskQueenside = CASTLING_ATTACK_MASKS[0 + sideIndex];
+                constexpr Bitboard checkMaskKingside = CASTLING_ATTACK_MASKS[1 + sideIndex];
+                constexpr Bitboard occMaskQueenside = CASTLING_OCCUPANCY_MASKS[0 + sideIndex];
+                constexpr Bitboard occMaskKingside = CASTLING_OCCUPANCY_MASKS[1 + sideIndex];
+
+                // these squares can't be attacked
+                canKingside = canKingside && !(checkMaskKingside & underFire) && !(occMaskKingside & occ);
+                canQueenside = canQueenside && !(checkMaskQueenside & underFire) && !(occMaskQueenside & occ);
+
+                if (canKingside)
+                    ret.push_back(make_move<CASTLE>(sq, sq + 2 * Dir::E));
+                if (canQueenside)
+                    ret.push_back(make_move<CASTLE>(sq, sq + 2 * Dir::W));
+
                 break;
             }
             case PAWN: {
@@ -282,12 +312,26 @@ namespace sc {
                         ret.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
                 }
 
+                // TODO: is this lambda compiled/optimized efficiently?
+                auto add_moves_check_promotions = [&]() {
+                    while (attk) {
+                        Square dstSq = pop_lsb(attk);
+                        // first or eigth ranks! promotion time!
+                        if ((0 <= dstSq && dstSq <= 7) || (56 <= dstSq && dstSq <= 63)) {
+                            for (PromoteType to : {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK})
+                                ret.push_back(make_promotion(sq, dstSq, to));
+                        } else {
+                            ret.push_back(make_normal(sq, dstSq));
+                        }
+                    }
+                };
+
                 attk &= pos.by_side(opposite_side(SIDE));
-                ADD_MOVES();
+                add_moves_check_promotions();
                 
                 // add moves
                 attk = PAWN_MOVES[SIDE][sq] & ~occ;
-                ADD_MOVES();
+                add_moves_check_promotions();
                 break;
             }
             default:

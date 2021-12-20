@@ -177,4 +177,74 @@ namespace sc {
 
         throw std::runtime_error{"Magic generation failed!"};
     }
+
+    StateInfo make_move(Position &pos, const Move mov) {
+        StateInfo ret = pos.state;
+
+        pos.state.enPassantTarget = NULL_SQUARE;
+
+        switch (mov.typeFlags) {
+        case NORMAL: {
+            pos.state.capturedPiece = pos.pieces[mov.dst];
+
+            Type movedType = type_of(pos.pieces[mov.src]);
+            pos.set(mov.dst, movedType, pos.turn);
+            pos.clear(mov.src);
+
+            switch (movedType) {
+            case PAWN: 
+                if (std::abs((int) mov.dst - (int) mov.src) == Dir::N * 2) {
+                    // std::cout << "ADD EP TARG\n";
+                    pos.state.enPassantTarget = mov.dst + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+                }
+                break;
+            case KING:
+                pos.state.castlingRights &= ~((KINGSIDE_MASK | QUEENSIDE_MASK) << (pos.turn == WHITE_SIDE ? 2 : 0));
+                break;
+            case ROOK: {
+                CastlingRights mask = file_ind_of(mov.src) == 0 ? QUEENSIDE_MASK : KINGSIDE_MASK;
+                if (pos.turn == WHITE_SIDE) mask <<= 2;
+                pos.state.castlingRights &= ~mask;
+                break;
+            }
+            default:
+                break; // do nothing.
+            }
+            break;
+        }
+        case CASTLE: {
+            pos.set(mov.dst, KING, pos.turn);
+            pos.clear(mov.src);
+
+            Square targetRook, rookNewDst;
+            if ((int) mov.dst - (int) mov.src > 0) { // kingside castling
+                targetRook = mov.src + 3 * Dir::W;
+                rookNewDst = mov.src + Dir::W;
+            } else {
+                rookNewDst = mov.src + Dir::W;
+                targetRook = mov.src - 4 * Dir::W;
+            }
+
+            pos.clear(targetRook);
+            pos.set(rookNewDst, ROOK, pos.turn);
+            break;
+        }
+        case EN_PASSANT: {
+            Square capturedPawn = pos.state.enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+            pos.state.capturedPiece = pos.pieces[capturedPawn];
+            pos.clear(capturedPawn);
+            pos.clear(mov.src);
+            pos.set(mov.dst, PAWN, pos.turn);
+            break;
+        }
+        case PROMOTION:
+            pos.state.capturedPiece = pos.pieces[mov.dst];
+            pos.clear(mov.src);
+            pos.set(mov.dst, static_cast<Type>((int) mov.promote + 2), pos.turn);
+            break;
+        }
+
+        pos.turn = opposite_side(pos.turn);
+        return ret;
+    }
 }
