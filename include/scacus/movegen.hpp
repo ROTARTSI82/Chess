@@ -2,6 +2,8 @@
 
 #include "scacus/bitboard.hpp"
 
+#include <functional>
+
 namespace sc {
     extern Bitboard KNIGHT_MOVES[BOARD_SIZE];
     extern Bitboard PAWN_ATTACKS[NUM_SIDES][BOARD_SIZE];
@@ -48,30 +50,6 @@ namespace sc {
 
     typedef std::vector<Move> MoveList;
 
-#define ADD_MOVES() while (attk) ret.push_back(make_normal(sq, pop_lsb(attk)))
-
-#define IF_RESOLVES_CHECK(action) while (attk) { \
-    Square _dstsq = pop_lsb(attk); \
-    /* in this case we capture the piece giving check! */ \
-    if (to_bitboard(_dstsq) & checkers) { \
-        action; \
-    } else { \
-        Bitboard testOcc = occ; \
-        testOcc ^= to_bitboard(sq); \
-        testOcc |= to_bitboard(_dstsq); \
-        if (check_resolved(pos, testOcc, checkers, kingBB)) { \
-            action; \
-        } \
-    } \
-}
-
-#define ADD_OTHER_SIDE_THREATS() if (tmpAtk & kingBB) { \
-    checkerAttk = tmpAtk; \
-    checkers |= to_bitboard(sq); \
-} \
-underFire |= tmpAtk; \
-break;
-
 
     template <Side SIDE>
     static constexpr inline uint64_t en_passant_is_legal(const Position &pos, const Bitboard possiblePinners, const Square sq);
@@ -115,25 +93,40 @@ break;
             Square sq = pop_lsb(opposingIter);
             Type type = type_of(pos.pieces[sq]);
             Bitboard tmpAtk = 0;
+
+            auto add_other_side_threats = [&]() {
+                if (tmpAtk & kingBB) {
+                    checkerAttk = tmpAtk;
+                    checkers |= to_bitboard(sq);
+                }
+                underFire |= tmpAtk;
+            };
+
             switch (type) {
             case PAWN:
                 tmpAtk = PAWN_ATTACKS[opposite_side(SIDE)][sq];
-                ADD_OTHER_SIDE_THREATS();
+                add_other_side_threats();
+                break;
             case KING:
                 tmpAtk = KING_MOVES[sq];
-                ADD_OTHER_SIDE_THREATS();
+                add_other_side_threats();
+                break;
             case QUEEN:
                 tmpAtk = lookup<BISHOP_MAGICS>(sq, occ) | lookup<ROOK_MAGICS>(sq, occ);
-                ADD_OTHER_SIDE_THREATS();
+                add_other_side_threats();
+                break;
             case BISHOP:
                 tmpAtk = lookup<BISHOP_MAGICS>(sq, occ);
-                ADD_OTHER_SIDE_THREATS();
+                add_other_side_threats();
+                break;
             case ROOK:
                 tmpAtk = lookup<ROOK_MAGICS>(sq, occ);
-                ADD_OTHER_SIDE_THREATS();
+                add_other_side_threats();
+                break;
             case KNIGHT:
                 tmpAtk = KNIGHT_MOVES[sq];
-                ADD_OTHER_SIDE_THREATS();
+                add_other_side_threats();
+                break;
             default:
                 dbg_dump_position(pos);
                 throw std::runtime_error{"Bitboards desynced from piece type array"};
@@ -150,6 +143,11 @@ break;
         Bitboard maybePinnedIter = maybePinned;
         Bitboard pinned = 0;
 
+        struct {
+            Bitboard attacks;
+            Square pinner;
+        } pinInfo[64];
+
         while (maybePinnedIter) {
             Square sq = pop_lsb(maybePinnedIter);
             Bitboard bb = to_bitboard(sq);
@@ -161,24 +159,29 @@ break;
             bool done = false;
             while (pinnerIter && !done) {
                 Square pinnerSq = pop_lsb(pinnerIter);
+                Bitboard pinnerAttk = 0;
+
+                auto update_pin_info = [&]() {
+                    if (pinnerAttk & kingBB) {
+                        pinned |= bb;
+                        done = true;
+                        pinInfo[sq].pinner = pinnerSq;
+                        pinInfo[sq].attacks = pinnerAttk;
+                    }
+                };
+
                 switch (type_of(pos.pieces[pinnerSq])) {
                 case BISHOP:
-                    if (lookup<BISHOP_MAGICS>(pinnerSq, maybePinned) & kingBB) {
-                        pinned |= bb;
-                        done = true;
-                    }
+                    pinnerAttk = lookup<BISHOP_MAGICS>(pinnerSq, maybePinned);
+                    update_pin_info();
                     break;
                 case ROOK:
-                    if (lookup<ROOK_MAGICS>(pinnerSq, maybePinned) & kingBB) {
-                        pinned |= bb;
-                        done = true;
-                    }
+                    pinnerAttk = lookup<ROOK_MAGICS>(pinnerSq, maybePinned) & kingBB;
+                    update_pin_info();
                     break;
                 case QUEEN:
-                    if ((lookup<ROOK_MAGICS>(pinnerSq, maybePinned) | lookup<BISHOP_MAGICS>(pinnerSq, maybePinned)) & kingBB) {
-                        pinned |= bb;
-                        done = true;
-                    }
+                    pinnerAttk = (lookup<ROOK_MAGICS>(pinnerSq, maybePinned) | lookup<BISHOP_MAGICS>(pinnerSq, maybePinned));
+                    update_pin_info();
                     break;
                 default:
                     throw std::runtime_error{"Non bishop/rook/queene pinner?"};
@@ -188,7 +191,7 @@ break;
             maybePinned ^= bb; // add it back
         }
 
-        Bitboard iter = pos.by_side(SIDE) & ~pinned;
+        Bitboard iter = pos.by_side(SIDE); // & ~pinned
         Bitboard attk = 0;
 
         if (checkers) { // i.e: in check
@@ -196,26 +199,50 @@ break;
             // print_bb(checkers);
             if (popcnt(checkers) == 1) { // only 1 checker. we can block by moving a piece.
 
-                const Bitboard landingSquares = checkers | (checkerAttk & ~occ); // squares that might block the check if we land on them
+
+                iter &= ~pinned; // pinned pieces cannot be moved while in check, i hope! TODO: find if this assumption is correct
+
+                // taking to checker, or squares the checker attacks (so that we might block the check)
+                const Bitboard landingSquares = checkers | (checkerAttk & ~occ);
 
                 while (iter) {
                     Square sq = pop_lsb(iter);
+
+                    auto if_resolves_check = [&](const std::function<void(const Square)> &action) {
+                        while (attk) {
+                            Square _dstsq = pop_lsb(attk);
+
+                            /* in this case we capture the piece giving check! */
+                            if (to_bitboard(_dstsq) & checkers) {
+                                action(_dstsq);
+                            } else {
+                                Bitboard testOcc = occ;
+                                testOcc ^= to_bitboard(sq);
+                                testOcc |= to_bitboard(_dstsq);
+                                if (check_resolved(pos, testOcc, checkers, kingBB)) {
+                                    action(_dstsq);
+                                }
+                            }
+                        }
+                    };
+
+
                     switch (type_of(pos.pieces[sq])) {
                     case KNIGHT:
                         attk = KNIGHT_MOVES[sq] & landingSquares;
-                        IF_RESOLVES_CHECK(ret.push_back(make_normal(sq, _dstsq)));
+                        if_resolves_check([&](const Square _dstsq) { ret.push_back(make_normal(sq, _dstsq)); });
                         break;
                     case QUEEN:
                         attk = (lookup<ROOK_MAGICS>(sq, occ) | lookup<BISHOP_MAGICS>(sq, occ)) & landingSquares;
-                        IF_RESOLVES_CHECK(ret.push_back(make_normal(sq, _dstsq)));
+                        if_resolves_check([&](const Square _dstsq) { ret.push_back(make_normal(sq, _dstsq)); });
                         break;
                     case BISHOP:
                         attk = lookup<BISHOP_MAGICS>(sq, occ) & landingSquares;
-                        IF_RESOLVES_CHECK(ret.push_back(make_normal(sq, _dstsq)));
+                        if_resolves_check([&](const Square _dstsq) { ret.push_back(make_normal(sq, _dstsq)); });
                         break;
                     case ROOK:
                         attk = lookup<ROOK_MAGICS>(sq, occ) & landingSquares;
-                        IF_RESOLVES_CHECK(ret.push_back(make_normal(sq, _dstsq)));
+                        if_resolves_check([&](const Square _dstsq) { ret.push_back(make_normal(sq, _dstsq)); });
                         break;
                     case KING:
                         // ignore the king. it's handled down below
@@ -237,15 +264,17 @@ break;
                             }
                         }
 
-                        #define ADD_MOV_CONSIDER_PROMOTE if ((0 <= _dstsq && _dstsq <= 7) || (56 <= _dstsq && _dstsq <= 63)) { \
-                                for (PromoteType to : {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK}) \
-                                    ret.push_back(make_promotion(sq, _dstsq, to)); \
-                            } else { \
-                                ret.push_back(make_normal(sq, _dstsq)); \
+                        auto add_and_consider_promote = [&](const Square _dstsq) {
+                            if ((0 <= _dstsq && _dstsq <= 7) || (56 <= _dstsq && _dstsq <= 63)) {
+                                for (PromoteType to : {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK})
+                                    ret.push_back(make_promotion(sq, _dstsq, to));
+                            } else {
+                                ret.push_back(make_normal(sq, _dstsq));
                             }
+                        };
 
                         attk &= pos.by_side(opposite_side(SIDE));
-                        IF_RESOLVES_CHECK(ADD_MOV_CONSIDER_PROMOTE);
+                        if_resolves_check(add_and_consider_promote);
                         
                         // add moves
                         attk = PAWN_MOVES[SIDE][sq];
@@ -253,7 +282,9 @@ break;
                         // hacky hack to prevent double advancing over a piece. TODO: Remove PAWN_MOVES table completely?
                         if (attk & occ) attk &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S));
                         attk &= landingSquares;
-                        IF_RESOLVES_CHECK(ADD_MOV_CONSIDER_PROMOTE);
+                        attk &= ~occ; // pawn advances cannot capture pieces. we must do this since landingSquares includes an or of the checkers.
+
+                        if_resolves_check(add_and_consider_promote);
                         break;
                     }
                     default:
@@ -273,26 +304,55 @@ break;
             Square sq = pop_lsb(iter);
             Type type = type_of(pos.pieces[sq]);
 
+            Bitboard srcBb = to_bitboard(sq);
+
+            auto plain_adder = [&](const Square to) {
+                ret.push_back(make_normal(sq, to));
+            };
+
+            // allow_taking_pinner is used by the pawn code to add pawn advances without adding advances that CAPTURE PIECES! 
+            // (fuck pawns, they're so bad)
+            auto add_moves = [&](const std::function<void(const Square to)> &action) {
+                if (srcBb & pinned) { // this piece is pinned
+                    // we MUST move onto a square that our pinner attacks or capture it
+                    Bitboard pinnerBb = to_bitboard(pinInfo[sq].pinner);
+                    attk &= (pinInfo[sq].attacks | pinnerBb);
+                    while (attk) {
+                        Square candidateDst = pop_lsb(attk);
+                        Bitboard testOcc = occ;
+                        testOcc ^= srcBb; // unset the square we left
+                        testOcc |= to_bitboard(candidateDst); // set the square we move to
+                        if (candidateDst == pinInfo[sq].pinner || check_resolved(pos, testOcc, pinnerBb, kingBB)) {
+                            action(candidateDst);
+                        }
+                    }
+                } else {
+                    while (attk) {
+                        action(pop_lsb(attk));
+                    }
+                }
+            };
+
             switch (type) {
             case KNIGHT:
                 attk = KNIGHT_MOVES[sq] & ~pos.by_side(SIDE);
-                ADD_MOVES();
+                add_moves(plain_adder);
                 break;
             case QUEEN:
                 attk = (lookup<ROOK_MAGICS>(sq, occ) | lookup<BISHOP_MAGICS>(sq, occ)) & ~pos.by_side(SIDE);
-                ADD_MOVES();
+                add_moves(plain_adder);
                 break;
             case BISHOP:
                 attk = lookup<BISHOP_MAGICS>(sq, occ) & ~pos.by_side(SIDE);
-                ADD_MOVES();
+                add_moves(plain_adder);
                 break;
             case ROOK:
                 attk = lookup<ROOK_MAGICS>(sq, occ) & ~pos.by_side(SIDE);
-                ADD_MOVES();
+                add_moves(plain_adder);
                 break;
             case KING: {
                 attk = KING_MOVES[sq] & ~pos.by_side(SIDE) & ~underFire;
-                ADD_MOVES();
+                add_moves(plain_adder);
 
                 static_assert(SIDE == WHITE_SIDE || SIDE == BLACK_SIDE);
                 constexpr auto sideIndex = (SIDE == WHITE_SIDE ? 2 : 0);
@@ -320,34 +380,30 @@ break;
 
                 Bitboard enPassant = to_bitboard(pos.state.enPassantTarget); // will be 0 if enPassantTarget is NULL_SQUARE
                 if (enPassant & attk) {
-                    if (en_passant_is_legal<SIDE>(pos, possiblePinners, sq))
+                    if (en_passant_is_legal<SIDE>(pos, possiblePinners, sq)) // en_passant_is_legal implicitly handles pinned pawns.
                         ret.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
                 }
 
                 // TODO: is this lambda compiled/optimized efficiently?
-                auto add_moves_check_promotions = [&]() {
-                    while (attk) {
-                        Square dstSq = pop_lsb(attk);
-                        // first or eigth ranks! promotion time!
-                        if ((0 <= dstSq && dstSq <= 7) || (56 <= dstSq && dstSq <= 63)) {
-                            for (PromoteType to : {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK})
-                                ret.push_back(make_promotion(sq, dstSq, to));
-                        } else {
-                            ret.push_back(make_normal(sq, dstSq));
-                        }
+                auto add_moves_check_promotions = [&](const Square dstSq) {
+                    if ((0 <= dstSq && dstSq <= 7) || (56 <= dstSq && dstSq <= 63)) {
+                        for (PromoteType to : {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK})
+                            ret.push_back(make_promotion(sq, dstSq, to));
+                    } else {
+                        ret.push_back(make_normal(sq, dstSq));
                     }
                 };
 
                 attk &= pos.by_side(opposite_side(SIDE));
-                add_moves_check_promotions();
+                add_moves(add_moves_check_promotions);
                 
                 // add moves
                 // TODO: Remove PAWN_MOVES table and calculate this properly
                 attk = PAWN_MOVES[SIDE][sq];
-                if (attk & occ) attk &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S));
+                if (attk & occ) attk &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S)); // disallow double advance if single is blocked.
                 attk &= ~occ;
 
-                add_moves_check_promotions();
+                add_moves(add_moves_check_promotions); // false -> do not allow_taking_pinner with a pawn advance
                 break;
             }
             default:
@@ -370,8 +426,8 @@ break;
         // this piece has moved away, and the en passant target has been captured
         // enPassantTarget points to the square "behind" the pawn, so we have to add an offset.
         testOcc ^= to_bitboard(sq);
-        // TODO: Do we have to set the bit at the enPassantTarget square?
-        // testOcc |= to_bitboard(pos.state.enPassantTarget);
+        // TODO: Do we have to set the bit at the enPassantTarget square? YES WE DO! This is important to calculate pinned en passanters.
+        testOcc |= to_bitboard(pos.state.enPassantTarget);
         testOcc ^= to_bitboard(pos.state.enPassantTarget + (SIDE == WHITE_SIDE ? Dir::S : Dir::N));
         uint64_t illegal = false; // or should i use bool and ?1:0
         Bitboard pinnerIter = possiblePinners;

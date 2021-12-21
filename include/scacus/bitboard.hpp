@@ -147,7 +147,7 @@ namespace sc {
 
         inline std::string long_alg_notation() const {
             std::string ret = sq_to_str(src) + sq_to_str(dst);
-            if (typeFlags == PROMOTION) ret += type_to_char(static_cast<Type>((int) promote + 2));
+            if (typeFlags == PROMOTION) ret += (type_to_char(static_cast<Type>((int) promote + 2)) + ('a' - 'A'));
             return ret;
         }
     };

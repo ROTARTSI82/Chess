@@ -1,9 +1,43 @@
 mine = """
-add perft output here
+f4f3 - 1
+h4g3 - 1
+h4h3 - 1
+h4g4 - 1
+h4g5 - 1
+h5b5 - 1
+h5c5 - 1
+h5d5 - 1
+h5e5 - 1
+h5f5 - 1
+h5g5 - 1
+h5h6 - 1
+h5h7 - 1
+h5h8 - 1
+d6d5 - 1
+c7c5 - 1
+c7c6 - 1
 """.replace(" -", ":")
 
 stock = """
-add perft output here
+f4f3: 1
+d6d5: 1
+c7c6: 1
+c7c5: 1
+h5b5: 1
+h5c5: 1
+h5d5: 1
+h5e5: 1
+h5f5: 1
+h5g5: 1
+h5h6: 1
+h5h7: 1
+h5h8: 1
+h4g3: 1
+h4h3: 1
+h4g4: 1
+h4g5: 1
+
+
 """
 
 rm_dup = lambda x : list(set(x))
