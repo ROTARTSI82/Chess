@@ -47,6 +47,7 @@ namespace sc {
     void init_movegen();
 
     StateInfo make_move(Position &pos, const Move mov);
+    void unmake_move(Position &pos, const StateInfo &info, const Move mov);
 
     typedef std::vector<Move> MoveList;
 
@@ -65,7 +66,7 @@ namespace sc {
         case BISHOP:
             return !(lookup<BISHOP_MAGICS>(sq, occ) & kingBB);
         default:
-            throw std::runtime_error{"Non queen/rook/bishop checker in checked_resolved"};
+            return false; // we cannot block and resolve a check from a non-bishop/rook/queen.
         }
     }
 
@@ -143,10 +144,8 @@ namespace sc {
         Bitboard maybePinnedIter = maybePinned;
         Bitboard pinned = 0;
 
-        struct {
-            Bitboard attacks;
-            Square pinner;
-        } pinInfo[64];
+        // the pinner pinning the piece at a specific sqaure
+        Square pinnerOf[64];
 
         while (maybePinnedIter) {
             Square sq = pop_lsb(maybePinnedIter);
@@ -165,8 +164,7 @@ namespace sc {
                     if (pinnerAttk & kingBB) {
                         pinned |= bb;
                         done = true;
-                        pinInfo[sq].pinner = pinnerSq;
-                        pinInfo[sq].attacks = pinnerAttk;
+                        pinnerOf[sq] = pinnerSq;
                     }
                 };
 
@@ -197,6 +195,36 @@ namespace sc {
         if (checkers) { // i.e: in check
             // std::cout << "CHECKERS\n";
             // print_bb(checkers);
+
+
+            Square sq;
+
+            auto plain_adder = [&](const Square _dstsq) { ret.push_back(make_normal(sq, _dstsq)); };
+            auto if_resolves_check = [&](const std::function<void(const Square)> &action) {
+                while (attk) {
+                    Square _dstsq = pop_lsb(attk);
+
+                    /* in this case we capture the piece giving check! */
+                    if (to_bitboard(_dstsq) & checkers) {
+                        action(_dstsq);
+                    } else {
+                        Bitboard testOcc = occ;
+                        Bitboard fromBb = to_bitboard(sq);
+                        Bitboard toBb = to_bitboard(_dstsq);
+
+                        testOcc ^= fromBb;
+                        testOcc |= toBb;
+
+                        // we need to update the king bitboard if the king is the one being moved
+                        auto effectiveKingBb = (fromBb & kingBB) ? toBb : kingBB;
+                        if (check_resolved(pos, testOcc, checkers, effectiveKingBb)) {
+                            action(_dstsq);
+                        }
+                    }
+                }
+            };
+
+
             if (popcnt(checkers) == 1) { // only 1 checker. we can block by moving a piece.
 
 
@@ -206,46 +234,30 @@ namespace sc {
                 const Bitboard landingSquares = checkers | (checkerAttk & ~occ);
 
                 while (iter) {
-                    Square sq = pop_lsb(iter);
-
-                    auto if_resolves_check = [&](const std::function<void(const Square)> &action) {
-                        while (attk) {
-                            Square _dstsq = pop_lsb(attk);
-
-                            /* in this case we capture the piece giving check! */
-                            if (to_bitboard(_dstsq) & checkers) {
-                                action(_dstsq);
-                            } else {
-                                Bitboard testOcc = occ;
-                                testOcc ^= to_bitboard(sq);
-                                testOcc |= to_bitboard(_dstsq);
-                                if (check_resolved(pos, testOcc, checkers, kingBB)) {
-                                    action(_dstsq);
-                                }
-                            }
-                        }
-                    };
+                    sq = pop_lsb(iter);
 
 
                     switch (type_of(pos.pieces[sq])) {
                     case KNIGHT:
                         attk = KNIGHT_MOVES[sq] & landingSquares;
-                        if_resolves_check([&](const Square _dstsq) { ret.push_back(make_normal(sq, _dstsq)); });
+                        if_resolves_check(plain_adder);
                         break;
                     case QUEEN:
                         attk = (lookup<ROOK_MAGICS>(sq, occ) | lookup<BISHOP_MAGICS>(sq, occ)) & landingSquares;
-                        if_resolves_check([&](const Square _dstsq) { ret.push_back(make_normal(sq, _dstsq)); });
+                        if_resolves_check(plain_adder);
                         break;
                     case BISHOP:
                         attk = lookup<BISHOP_MAGICS>(sq, occ) & landingSquares;
-                        if_resolves_check([&](const Square _dstsq) { ret.push_back(make_normal(sq, _dstsq)); });
+                        if_resolves_check(plain_adder);
                         break;
                     case ROOK:
                         attk = lookup<ROOK_MAGICS>(sq, occ) & landingSquares;
-                        if_resolves_check([&](const Square _dstsq) { ret.push_back(make_normal(sq, _dstsq)); });
+                        if_resolves_check(plain_adder);
                         break;
                     case KING:
                         // ignore the king. it's handled down below
+                        // it's not handled here because we need that code
+                        // in the case of double checks, and this code only handles single checks.
                         break;
                     case PAWN: {
                         attk = PAWN_ATTACKS[SIDE][sq];
@@ -288,14 +300,15 @@ namespace sc {
                         break;
                     }
                     default:
-                        throw std::runtime_error{"Illegal null piece on bitboard?"};
+                        throw std::runtime_error{"Illegal null piece on bitboard? (from movegen in check)"};
                     }
                 }
 
             }
 
             attk = KING_MOVES[king] & ~underFire & ~pos.by_side(SIDE);
-            while (attk) ret.push_back(make_normal(king, pop_lsb(attk)));
+            sq = king; // if_resolves_check expects sq to be set accordingly
+            if_resolves_check(plain_adder);
             // castling is illegal in check anyways; don't consider it
             return ret;
         }
@@ -313,16 +326,16 @@ namespace sc {
             // allow_taking_pinner is used by the pawn code to add pawn advances without adding advances that CAPTURE PIECES! 
             // (fuck pawns, they're so bad)
             auto add_moves = [&](const std::function<void(const Square to)> &action) {
-                if (srcBb & pinned) { // this piece is pinned
+                if (srcBb & pinned) { // this piece is pinned. The king can never be pinned (otherwise we go to the check code)
                     // we MUST move onto a square that our pinner attacks or capture it
-                    Bitboard pinnerBb = to_bitboard(pinInfo[sq].pinner);
-                    attk &= (pinInfo[sq].attacks | pinnerBb);
+                    Bitboard pinnerBb = to_bitboard(pinnerOf[sq]);
+                    attk &= pinLines; // step into a pin line (which includes pinners)
                     while (attk) {
                         Square candidateDst = pop_lsb(attk);
                         Bitboard testOcc = occ;
                         testOcc ^= srcBb; // unset the square we left
                         testOcc |= to_bitboard(candidateDst); // set the square we move to
-                        if (candidateDst == pinInfo[sq].pinner || check_resolved(pos, testOcc, pinnerBb, kingBB)) {
+                        if (candidateDst == pinnerOf[sq] || check_resolved(pos, testOcc, pinnerBb, kingBB)) {
                             action(candidateDst);
                         }
                     }
@@ -407,7 +420,8 @@ namespace sc {
                 break;
             }
             default:
-                throw std::runtime_error{"Illegal null piece on bitboard?"};
+                dbg_dump_position(pos);
+                throw std::runtime_error{"Illegal null piece on bitboard? (from normal movegen)"};
             }
         }
 

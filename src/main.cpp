@@ -4,6 +4,7 @@
 
 #include <chrono>
 
+#if 0
 struct PerftInfo {
     int nodes = 0;
     int castles = 0;
@@ -19,6 +20,7 @@ int perft_worker(sc::Position &p, int depth, PerftInfo &store) {
 
     int tot = 0;
     // std::cout << "legals call\n";
+    sc::Side t = p.turn;
     sc::MoveList legals = p.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(p) : sc::standard_moves<sc::BLACK_SIDE>(p);
     // std::cout << "legals call\n";
 
@@ -28,9 +30,10 @@ int perft_worker(sc::Position &p, int depth, PerftInfo &store) {
         if (m.typeFlags == sc::CASTLE) store.castles++;
         if (p.pieces[m.dst] != sc::NULL_COLORED_TYPE) store.captures++;
 
-        sc::Position cpy = p;
-        sc::make_move(cpy, m);
-        tot += perft_worker(cpy, depth - 1, store);
+        sc::StateInfo undo = sc::make_move(p, m);
+        tot += perft_worker(p, depth - 1, store);
+        sc::unmake_move(p, undo, m);
+        if (p.turn != t) throw std::runtime_error{"Turn corrupted"};
     }
 
     return tot;
@@ -40,14 +43,16 @@ void perft(const std::string &fen, int depth) {
     sc::Position pos{fen};
     PerftInfo p;
     // std::cout << "first legals call\n";
+    sc::Side t = pos.turn;
     sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
     // std::cout << "past first legals call\n";
     for (const auto &m : legals) {
-        sc::Position cpy = pos;
-        sc::make_move(cpy, m);
-        int res = perft_worker(cpy, depth, p);
+        sc::StateInfo undo = sc::make_move(pos, m);
+        int res = perft_worker(pos, depth, p);
         p.nodes += res;
         std::cout << m.long_alg_notation() << " - " << res << '\n';
+        sc::unmake_move(pos, undo, m);
+        if (pos.turn != t) throw std::runtime_error{"Turn corrupted!"};
     }
 
     std::cout << "Total on depth " << depth << " = " << p.nodes << "\n";
@@ -73,12 +78,12 @@ uint64_t Perft(int depth, sc::Position &pos)
 
 //   std::cout << "end moves\n";
   for (auto m : legals) {
-    sc::Position cpy = pos;
 
     // std::cout << "make move\n";
-    sc::make_move(cpy, m);
+    sc::StateInfo undo = sc::make_move(pos, m);
 //   std::cout << "end make move\n";
-    nodes += Perft(depth - 1, cpy);
+    nodes += Perft(depth - 1, pos);
+    sc::unmake_move(pos, undo, m);
 
   }
   return nodes;
@@ -119,3 +124,5 @@ int main(int argc, char **argv) {
         }
     }
 }
+
+#endif

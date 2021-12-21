@@ -178,10 +178,28 @@ namespace sc {
         throw std::runtime_error{"Magic generation failed!"};
     }
 
+    inline constexpr std::pair<Square, Square> castle_info(const Move mov) {
+        Square targetRook = 0, rookNewDst = 0;
+        if ((int) mov.dst - (int) mov.src > 0) { // kingside castling
+            targetRook = mov.src + 3 * Dir::E;
+            rookNewDst = mov.dst + Dir::W;
+        } else {
+            rookNewDst = mov.dst + Dir::E;
+            targetRook = mov.src + 4 * Dir::W;
+        }
+        return std::make_pair(targetRook, rookNewDst);
+    }
+
     StateInfo make_move(Position &pos, const Move mov) {
         StateInfo ret = pos.state;
 
         pos.state.enPassantTarget = NULL_SQUARE;
+
+        const auto remove_castling_rights = [&](const Square rookSq) {
+            CastlingRights mask = file_ind_of(rookSq) == 0 ? QUEENSIDE_MASK : KINGSIDE_MASK;
+            if (pos.turn == WHITE_SIDE) mask <<= 2;
+            pos.state.castlingRights &= ~mask;
+        };
 
         switch (mov.typeFlags) {
         case NORMAL: {
@@ -196,17 +214,15 @@ namespace sc {
             switch (movedType) {
             case PAWN: 
                 if (std::abs((int) mov.dst - (int) mov.src) == Dir::N * 2) {
-                    // std::cout << "ADD EP TARG\n";
                     pos.state.enPassantTarget = mov.dst + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+                    // std::cout << "ADD EP TARG " << (int) pos.state.enPassantTarget << '\n';
                 }
                 break;
             case KING:
                 pos.state.castlingRights &= ~((KINGSIDE_MASK | QUEENSIDE_MASK) << (pos.turn == WHITE_SIDE ? 2 : 0));
                 break;
             case ROOK: {
-                CastlingRights mask = file_ind_of(mov.src) == 0 ? QUEENSIDE_MASK : KINGSIDE_MASK;
-                if (pos.turn == WHITE_SIDE) mask <<= 2;
-                pos.state.castlingRights &= ~mask;
+                remove_castling_rights(mov.src);
                 break;
             }
             default:
@@ -219,20 +235,18 @@ namespace sc {
             pos.clear(mov.src);
 
             Square targetRook, rookNewDst;
-            if ((int) mov.dst - (int) mov.src > 0) { // kingside castling
-                targetRook = mov.src + 3 * Dir::W;
-                rookNewDst = mov.src + Dir::W;
-            } else {
-                rookNewDst = mov.src + Dir::W;
-                targetRook = mov.src - 4 * Dir::W;
-            }
+            std::tie(targetRook, rookNewDst) = castle_info(mov);
 
             pos.clear(targetRook);
             pos.set(rookNewDst, ROOK, pos.turn);
+
+            remove_castling_rights(targetRook);
             break;
         }
         case EN_PASSANT: {
-            Square capturedPawn = pos.state.enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+            // use enPassantTarget from ret: pos.state.enPassant target has already been set to null.
+            Square capturedPawn = ret.enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+            // std::cout << "domove CapturedPawn = " << (int) capturedPawn << std::endl;
             pos.state.capturedPiece = pos.pieces[capturedPawn];
             pos.clear(capturedPawn);
             pos.clear(mov.src);
@@ -249,5 +263,44 @@ namespace sc {
 
         pos.turn = opposite_side(pos.turn);
         return ret;
+    }
+
+    void unmake_move(Position &pos, const StateInfo &info, const Move mov) {
+        pos.turn = opposite_side(pos.turn);
+
+        switch (mov.typeFlags) {
+        case NORMAL:
+            pos.set(mov.src, type_of(pos.pieces[mov.dst]), pos.turn);
+            pos.clear(mov.dst);
+            if (pos.state.capturedPiece != NULL_COLORED_TYPE)
+                pos.set(mov.dst, type_of(pos.state.capturedPiece), side_of(pos.state.capturedPiece));
+            break;
+        case PROMOTION:
+            pos.set(mov.src, PAWN, pos.turn);
+            pos.clear(mov.dst);
+            if (pos.state.capturedPiece != NULL_COLORED_TYPE)
+                pos.set(mov.dst, type_of(pos.state.capturedPiece), side_of(pos.state.capturedPiece));
+            break;
+        case EN_PASSANT: {
+            Square captureSq = info.enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+            // std::cout << "undomove captureSq = " << (int) captureSq << std::endl;
+            pos.set(captureSq, PAWN, opposite_side(pos.turn));
+            pos.clear(mov.dst);
+            pos.set(mov.src, PAWN, pos.turn);
+            break;
+        }
+        case CASTLE:
+            pos.set(mov.src, KING, pos.turn);
+            pos.clear(mov.dst);
+
+            Square targetRook, rookNewDst;
+            std::tie(targetRook, rookNewDst) = castle_info(mov);
+
+            pos.clear(rookNewDst);
+            pos.set(targetRook, ROOK, pos.turn);
+            break;
+        }
+
+        pos.state = info;
     }
 }

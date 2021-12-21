@@ -77,7 +77,7 @@ namespace sc {
     };
 
     inline char type_to_char(const Type t) {
-        static constexpr char table[] = {0, 'K', 'Q', 'R', 'B', 'N', 'P'};
+        static constexpr char table[] = {'Z', 'K', 'Q', 'R', 'B', 'N', 'P', 'W', 'X', 'Y'};
         return table[t];
     }
 
@@ -144,6 +144,10 @@ namespace sc {
         Square dst : 6;
         PromoteType promote : 2;
         MoveType typeFlags : 2;
+
+        inline constexpr bool operator==(const Move rhs) const {
+            return src == rhs.src && dst == rhs.dst && promote == rhs.promote && typeFlags == rhs.typeFlags;
+        }
 
         inline std::string long_alg_notation() const {
             std::string ret = sq_to_str(src) + sq_to_str(dst);
