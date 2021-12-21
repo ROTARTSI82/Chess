@@ -100,8 +100,22 @@ int main(int argc, char **argv) {
         if (line == "quit") break;
 
         sc::Position pos{line};
-        for (int i = 1; i < 8; i++) {
-            std::cout << "perft(" << i << ") = " << Perft(i, pos) << '\n';
+        sc::standard_moves<sc::BLACK_SIDE>(pos);
+
+        // while (true) {
+        //     auto legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
+        //     sc::dbg_dump_position(pos);
+
+        //     int i = 0;
+        //     for (const auto m : legals) std::cout << "moves[" << i++ << "] = " << m.long_alg_notation() << '\n';
+
+        //     std::cout << "select one> ";
+        //     std::cin >> i;
+        //     sc::make_move(pos, legals.at(i));
+        // }
+        for (int i = 0; i < 8; i++) {
+            perft(line, i);
+            // std::cout << "perft(" << i << ") = " << Perft(i, pos) << '\n';
         }
     }
 }

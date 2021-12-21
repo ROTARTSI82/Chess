@@ -52,20 +52,26 @@ namespace sc {
 
 #define IF_RESOLVES_CHECK(action) while (attk) { \
     Square _dstsq = pop_lsb(attk); \
-    Bitboard testOcc = occ; \
-    testOcc ^= to_bitboard(sq); \
-    testOcc |= to_bitboard(_dstsq); \
-    if (check_resolved(pos, testOcc, checkers, kingBB)) { \
+    /* in this case we capture the piece giving check! */ \
+    if (to_bitboard(_dstsq) & checkers) { \
         action; \
+    } else { \
+        Bitboard testOcc = occ; \
+        testOcc ^= to_bitboard(sq); \
+        testOcc |= to_bitboard(_dstsq); \
+        if (check_resolved(pos, testOcc, checkers, kingBB)) { \
+            action; \
+        } \
     } \
 }
 
 #define ADD_OTHER_SIDE_THREATS() if (tmpAtk & kingBB) { \
-        checkerAttk = tmpAtk; \
-        checkers |= to_bitboard(sq); \
-    } \
-    underFire |= tmpAtk; \
-    break;
+    checkerAttk = tmpAtk; \
+    checkers |= to_bitboard(sq); \
+} \
+underFire |= tmpAtk; \
+break;
+
 
     template <Side SIDE>
     static constexpr inline uint64_t en_passant_is_legal(const Position &pos, const Bitboard possiblePinners, const Square sq);
@@ -75,11 +81,11 @@ namespace sc {
         Square sq = std::__countr_zero<uint64_t>(checker);
         switch (type_of(pos.pieces[sq])) {
         case QUEEN:
-            return (lookup<BISHOP_MAGICS>(sq, occ) | lookup<ROOK_MAGICS>(sq, occ)) & kingBB;
+            return !((lookup<BISHOP_MAGICS>(sq, occ) | lookup<ROOK_MAGICS>(sq, occ)) & kingBB);
         case ROOK:
-            return lookup<ROOK_MAGICS>(sq, occ) & kingBB;
+            return !(lookup<ROOK_MAGICS>(sq, occ) & kingBB);
         case BISHOP:
-            return lookup<BISHOP_MAGICS>(sq, occ) & kingBB;
+            return !(lookup<BISHOP_MAGICS>(sq, occ) & kingBB);
         default:
             throw std::runtime_error{"Non queen/rook/bishop checker in checked_resolved"};
         }
@@ -129,12 +135,13 @@ namespace sc {
                 tmpAtk = KNIGHT_MOVES[sq];
                 ADD_OTHER_SIDE_THREATS();
             default:
+                dbg_dump_position(pos);
                 throw std::runtime_error{"Bitboards desynced from piece type array"};
             }
         }
 
         opposingIter = pos.by_side(opposite_side(SIDE));
-        Bitboard possiblePinners = opposingIter & pos.by_type(QUEEN) & pos.by_type(ROOK) & pos.by_type(BISHOP);
+        Bitboard possiblePinners = opposingIter & (pos.by_type(QUEEN) | pos.by_type(ROOK) | pos.by_type(BISHOP));
         // blocked by opposing pieces, ignoring own pieces.
         Bitboard pinLines = lookup<ROOK_MAGICS>(king, opposingIter) | lookup<BISHOP_MAGICS>(king, opposingIter);
         possiblePinners &= pinLines;
@@ -185,9 +192,11 @@ namespace sc {
         Bitboard attk = 0;
 
         if (checkers) { // i.e: in check
+            // std::cout << "CHECKERS\n";
+            // print_bb(checkers);
             if (popcnt(checkers) == 1) { // only 1 checker. we can block by moving a piece.
 
-                const Bitboard landingSquares = checkerAttk & ~occ; // squares that might block the check if we land on them
+                const Bitboard landingSquares = checkers | (checkerAttk & ~occ); // squares that might block the check if we land on them
 
                 while (iter) {
                     Square sq = pop_lsb(iter);
@@ -228,20 +237,23 @@ namespace sc {
                             }
                         }
 
-                        // don't do this part! capturing an opposing piece never resolves check
-                        // attk &= pos.by_side(opposite_side(SIDE));
-                        // ADD_MOVES();
+                        #define ADD_MOV_CONSIDER_PROMOTE if ((0 <= _dstsq && _dstsq <= 7) || (56 <= _dstsq && _dstsq <= 63)) { \
+                                for (PromoteType to : {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK}) \
+                                    ret.push_back(make_promotion(sq, _dstsq, to)); \
+                            } else { \
+                                ret.push_back(make_normal(sq, _dstsq)); \
+                            }
+
+                        attk &= pos.by_side(opposite_side(SIDE));
+                        IF_RESOLVES_CHECK(ADD_MOV_CONSIDER_PROMOTE);
                         
                         // add moves
-                        attk = PAWN_MOVES[SIDE][sq] & landingSquares;
-                        IF_RESOLVES_CHECK({
-                            if ((0 <= _dstsq && _dstsq <= 7) || (56 <= _dstsq && _dstsq <= 63)) {
-                                for (PromoteType to : {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK})
-                                    ret.push_back(make_promotion(sq, _dstsq, to));
-                            } else {
-                                ret.push_back(make_normal(sq, _dstsq));
-                            }
-                        });
+                        attk = PAWN_MOVES[SIDE][sq];
+
+                        // hacky hack to prevent double advancing over a piece. TODO: Remove PAWN_MOVES table completely?
+                        if (attk & occ) attk &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S));
+                        attk &= landingSquares;
+                        IF_RESOLVES_CHECK(ADD_MOV_CONSIDER_PROMOTE);
                         break;
                     }
                     default:
@@ -330,7 +342,11 @@ namespace sc {
                 add_moves_check_promotions();
                 
                 // add moves
-                attk = PAWN_MOVES[SIDE][sq] & ~occ;
+                // TODO: Remove PAWN_MOVES table and calculate this properly
+                attk = PAWN_MOVES[SIDE][sq];
+                if (attk & occ) attk &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S));
+                attk &= ~occ;
+
                 add_moves_check_promotions();
                 break;
             }

@@ -103,7 +103,7 @@ namespace sc {
         if (store) *store = i + offset;
     }
 
-    std::string Position::get_fen() {
+    std::string Position::get_fen() const {
         // assuming 3-digit fullmoves because yeah
         constexpr auto LONGEST_LEGAL_FEN = 88;
 
@@ -157,5 +157,28 @@ namespace sc {
         ret += ' ';
         ret += std::to_string(fullmoves);
         return ret;
+    }
+
+    void dbg_dump_position(const Position &pos) {
+        std::cout << "FEN: " << pos.get_fen() << '\n';
+        std::cout << "captured piece: " << ct_to_char(pos.state.capturedPiece) << '\n';
+        
+        std::cout << "\n\nWHITE:\n";
+        print_bb(pos.by_side(WHITE_SIDE));
+        std::cout << "\n\nBLACK:\n";
+        print_bb(pos.by_side(BLACK_SIDE));
+
+        std::cout << "\n\nPAWNS:\n";
+        print_bb(pos.by_type(PAWN));
+        std::cout << "\n\nKINGS:\n";
+        print_bb(pos.by_type(KING));
+        std::cout << "\n\nQUEENS:\n";
+        print_bb(pos.by_type(QUEEN));
+        std::cout << "\n\nKNIGHTS:\n";
+        print_bb(pos.by_type(KNIGHT));
+        std::cout << "\n\nBISHOPS:\n";
+        print_bb(pos.by_type(BISHOP));
+        std::cout << "\n\nROOKS:\n";
+        print_bb(pos.by_type(ROOK));
     }
 }

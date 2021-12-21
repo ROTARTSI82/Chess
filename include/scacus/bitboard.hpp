@@ -170,7 +170,7 @@ namespace sc {
     public:
         explicit Position(const std::string &fen, int *store = nullptr); // store: Used to store the index into the string that we read to
         Position() : Position(std::string{STARTING_POS_FEN}) {};
-        std::string get_fen();
+        std::string get_fen() const;
 
         inline void set(const Square p, const Type type, const Side side) {
             pieces[p] = make_ColoredType(type, side);
@@ -198,6 +198,8 @@ namespace sc {
         StateInfo state;
         Side turn = WHITE_SIDE;
     };
+
+    void dbg_dump_position(const Position &pos);
 
     // generates a random number with a seed input, which it updates in place
     // see xorshift64. Useful for deterministic results when selecting magics.

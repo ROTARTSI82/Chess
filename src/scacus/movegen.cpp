@@ -188,6 +188,8 @@ namespace sc {
             pos.state.capturedPiece = pos.pieces[mov.dst];
 
             Type movedType = type_of(pos.pieces[mov.src]);
+
+            pos.clear(mov.dst);
             pos.set(mov.dst, movedType, pos.turn);
             pos.clear(mov.src);
 
@@ -239,6 +241,7 @@ namespace sc {
         }
         case PROMOTION:
             pos.state.capturedPiece = pos.pieces[mov.dst];
+            pos.clear(mov.dst);
             pos.clear(mov.src);
             pos.set(mov.dst, static_cast<Type>((int) mov.promote + 2), pos.turn);
             break;
