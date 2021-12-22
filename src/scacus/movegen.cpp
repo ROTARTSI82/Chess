@@ -193,6 +193,11 @@ namespace sc {
     StateInfo make_move(Position &pos, const Move mov) {
         StateInfo ret = pos.state;
 
+        if (pos.turn == BLACK_SIDE) pos.fullmoves++;
+        pos.state.halfmoves++;
+
+        if (pos.pieces[mov.dst] != NULL_COLORED_TYPE) pos.state.halfmoves = 0;
+
         pos.state.enPassantTarget = NULL_SQUARE;
 
         const auto remove_castling_rights = [&](const Square rookSq, Side side) {
@@ -200,11 +205,17 @@ namespace sc {
             const auto rank = rank_ind_of(rookSq);
 
             // this rook is not on a square of a castling rook, so it does not affect castling rights.
-            if ((file != 0 && file != 7) || (rank != 0 && rank != 7)) return;
+            if (file != 0 && file != 7) return;
 
             CastlingRights mask = file == 0 ? QUEENSIDE_MASK : KINGSIDE_MASK;
 
-            if (side == WHITE_SIDE) mask <<= 2;
+            if (side == WHITE_SIDE) {
+                if (rank != 0) return;
+                mask <<= 2;
+            } else {
+                if (rank != 7) return;
+            }
+
             pos.state.castlingRights &= ~mask;
         };
 
@@ -222,7 +233,8 @@ namespace sc {
             pos.clear(mov.src);
 
             switch (movedType) {
-            case PAWN: 
+            case PAWN:
+                pos.state.halfmoves = 0; 
                 if (std::abs((int) mov.dst - (int) mov.src) == Dir::N * 2)
                     pos.state.enPassantTarget = mov.dst + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
                 break;
@@ -277,6 +289,7 @@ namespace sc {
 
     void unmake_move(Position &pos, const StateInfo &info, const Move mov) {
         pos.turn = opposite_side(pos.turn);
+        if (pos.turn == BLACK_SIDE) pos.fullmoves--;
 
         switch (mov.typeFlags) {
         case NORMAL:

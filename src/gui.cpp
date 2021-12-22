@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
                     // turn ^= true;
                     break;
                 case SDLK_g: {
-                    auto engineMove = sc::primitive_search(pos, 7);
+                    auto engineMove = sc::primitive_search(pos, 4);
                     undoCaps.push_back(sc::make_move(pos, engineMove.first));
                     undoMoves.push_back(engineMove.first);
                     std::cout << "Engine evaluation: " << engineMove.second << "\n";

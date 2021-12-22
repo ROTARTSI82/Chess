@@ -55,9 +55,7 @@ namespace sc {
     template <Side SIDE>
     static constexpr inline uint64_t en_passant_is_legal(const Position &pos, const Square sq);
 
-    // checks if there is no check given by checker with the given occupancy bits
-    static constexpr inline bool check_resolved(const Position &pos, const Bitboard occ, const Bitboard checker, const Bitboard kingBB) {
-        Square sq = std::__countr_zero<uint64_t>(checker);
+    static constexpr inline bool check_resolved_sq(const Position &pos, const Bitboard occ, const Bitboard kingBB, const Square sq) {
         switch (type_of(pos.pieces[sq])) {
         case QUEEN:
             return !((lookup<BISHOP_MAGICS>(sq, occ) | lookup<ROOK_MAGICS>(sq, occ)) & kingBB);
@@ -72,6 +70,11 @@ namespace sc {
         default:
             throw std::runtime_error{"We're being checked by the opposing king? what?"};
         }
+    }
+
+    // checks if there is no check given by checker with the given occupancy bits
+    static constexpr inline bool check_resolved(const Position &pos, const Bitboard occ, const Bitboard checker, const Bitboard kingBB) {
+        return check_resolved_sq(pos, occ, kingBB, std::__countr_zero(checker));
     }
 
     // Assumption: You can't en passant and promote at the same time.
@@ -186,7 +189,7 @@ namespace sc {
                     update_pin_info();
                     break;
                 default:
-                    throw std::runtime_error{"Non bishop/rook/queene pinner?"};
+                    throw std::runtime_error{"Non bishop/rook/queen pinner? (from pinner calculation loop)"};
                 }
             }
 
@@ -216,9 +219,7 @@ namespace sc {
                         testOcc ^= fromBb;
                         testOcc |= toBb;
 
-                        // we need to update the king bitboard if the king is the one being moved
-                        auto effectiveKingBb = (fromBb & kingBB) ? toBb : kingBB;
-                        if (check_resolved(pos, testOcc, checkers, effectiveKingBb)) {
+                        if (check_resolved(pos, testOcc, checkers, kingBB)) {
                             action(_dstsq);
                         }
                     }
@@ -308,8 +309,32 @@ namespace sc {
             }
 
             attk = KING_MOVES[king] & ~underFire & ~pos.by_side(SIDE);
-            sq = king; // if_resolves_check expects sq to be set accordingly
-            if_resolves_check(plain_adder);
+
+            Bitboard fromBb = to_bitboard(king);
+            while (attk) {
+                Square _dstsq = pop_lsb(attk);
+                Bitboard testOcc = occ;
+                Bitboard toBb = to_bitboard(_dstsq);
+
+                testOcc ^= fromBb;
+                testOcc |= toBb;
+    
+                // we need to update the king bitboard if the king is the one being moved
+                // also, the king needs special handling for double checks!
+                // thus, we use toBb instead of kingBB, and we entertain the possibility of
+                // more than one checker.
+                // see r4kQr/p1ppq1b1/bn4p1/4N3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQ - 0 3
+                Bitboard checkersIter = checkers & ~to_bitboard(_dstsq); // remove the checker we capture
+                while (checkersIter) {
+                    if (!check_resolved_sq(pos, testOcc, toBb, pop_lsb(checkersIter)))
+                        goto skipBcFail; // we are still in check! just return
+                }
+
+                ret.push_back(make_normal(king, _dstsq));
+
+                skipBcFail:;
+            }
+
             // castling is illegal in check anyways; don't consider it
             return ret;
         }

@@ -164,7 +164,7 @@ namespace sc {
 
     // info about a position that we would like to store separately for move undo
     struct StateInfo {
-        // Bitboard pinned[NUM_SIDES]; // pinned pieces
+        int halfmoves = 0; // number of plies since a capture or pawn advance
 
         CastlingRights castlingRights;
         Square enPassantTarget = NULL_SQUARE;
@@ -193,7 +193,6 @@ namespace sc {
         constexpr inline Bitboard by_type(const Type t) const { return byType[t]; }
 
     public:
-        int halfmoves = 0; // number of plies since a capture or pawn advance
         int fullmoves = 1; // increment every time black moves
 
         ColoredType pieces[BOARD_SIZE];

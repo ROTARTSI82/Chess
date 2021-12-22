@@ -97,9 +97,17 @@ namespace sc {
 
         i += 2; // skip both '-' AND space
 
-        std::size_t offset;
-        halfmoves = std::stoi(fen.substr(i), &offset);
-        fullmoves = std::stoi(fen.substr(i + offset), &offset);
+        std::size_t offset = 0;
+
+        // some fens don't include the halfmove/fullmove numbers for some reason?
+        try {
+            state.halfmoves = std::stoi(fen.substr(i), &offset);
+            fullmoves = std::stoi(fen.substr(i + offset), &offset);
+        } catch (const std::exception &e) {
+            state.halfmoves = 0;
+            fullmoves = 1;
+        }
+
         if (store) *store = i + offset;
     }
 
@@ -153,7 +161,7 @@ namespace sc {
         ret += ' ';
         ret += (state.enPassantTarget != NULL_SQUARE ? sq_to_str(state.enPassantTarget) : "-");
         ret += ' ';
-        ret += std::to_string(halfmoves);
+        ret += std::to_string(state.halfmoves);
         ret += ' ';
         ret += std::to_string(fullmoves);
         return ret;

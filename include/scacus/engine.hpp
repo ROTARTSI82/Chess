@@ -8,17 +8,50 @@
 
 namespace sc {
 
-    static inline int primitive_eval(Position &pos, int alpha, int beta, int depth) {
-        if (depth <= 0) {
-            auto count = [&](const Type t) {
-                return popcnt(pos.by_side(pos.turn) & pos.by_type(t)) - popcnt(pos.by_side(opposite_side(pos.turn)) & pos.by_type(t));
-            };
+    static inline int eval(Position &pos, const MoveList &legalMoves) {
+        if (legalMoves.empty()) return std::numeric_limits<int>::min() + 2;
 
-            return 100 * count(PAWN) + 300 * count(BISHOP) + 300 * count(KNIGHT) + 500 * count(ROOK) + 900 * count(QUEEN);
+        auto count = [&](const Type t) {
+            return popcnt(pos.by_side(pos.turn) & pos.by_type(t)) - popcnt(pos.by_side(opposite_side(pos.turn)) & pos.by_type(t));
+        };
+
+        auto opposingMoves = pos.turn == WHITE_SIDE ? standard_moves<BLACK_SIDE>(pos) : standard_moves<WHITE_SIDE>(pos);
+
+        return (legalMoves.size() - opposingMoves.size()) + 100 * count(PAWN) + 300 * count(BISHOP) + 300 * count(KNIGHT) + 500 * count(ROOK) + 900 * count(QUEEN);
+    }
+
+    static inline int quiescence_search(Position &pos, int alpha, int beta) {
+        auto legalMoves = pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
+        int stand_pat = eval(pos, legalMoves);
+        if (stand_pat >= beta)
+            return beta;
+        if (alpha < stand_pat)
+            alpha = stand_pat;
+
+        for (const auto mov : legalMoves) {
+            // mov.typeFlags == EN_PASSANT ||
+            // TODO: not searching en passants right now bc they are buggy
+            if ((pos.by_side(opposite_side(pos.turn)) & to_bitboard(mov.dst)) && mov.typeFlags != EN_PASSANT) {
+                auto undo = sc::make_move(pos, mov);
+                int score = -quiescence_search(pos, -beta, -alpha);
+                sc::unmake_move(pos, undo, mov);
+
+                if (score >= beta)
+                    return beta;
+                alpha = std::max(alpha, score);
+            }
+        }
+
+        return alpha;
+    }
+
+    static inline int primitive_eval(Position &pos, int alpha, int beta, int depth) {
+
+        if (depth <= 0) {
+            return quiescence_search(pos, alpha, beta);
         }
 
         auto legalMoves = pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
-
         if (legalMoves.empty())
             return std::numeric_limits<int>::min() + 2; // TODO: differentiate stalemate & checkmate
 

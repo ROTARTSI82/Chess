@@ -7,8 +7,8 @@ project(Scacus)
 add_compile_options(-Ofast -std=c++2a -Wall -Wextra -Wpedantic)
 add_link_options(-Ofast -std=c++2a -Wall -Wextra -Wpedantic)
 
-add_compile_options(-g3 -fsanitize=address -fno-omit-frame-pointer)
-add_link_options(-g3 -fsanitize=address -fno-omit-frame-pointer)
+# add_compile_options(-g3 -fsanitize=address -fno-omit-frame-pointer)
+# add_link_options(-g3 -fsanitize=address -fno-omit-frame-pointer)
 
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
