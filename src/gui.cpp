@@ -12,100 +12,43 @@
 
 using namespace sc;
 
-struct PerftInfo {
-    int nodes = 0;
-    int castles = 0;
-    int promotions = 0;
-    int captures = 0;
-    int enPassants = 0;
-    std::vector<Move> line;
-};
-
-int perft_worker(sc::Position &p, int depth, PerftInfo &store) {
+uint64_t perft_worker(sc::Position &pos, int depth) {
     if (depth == 0)
         return 1;
-    
 
-    int tot = 0;
-    // std::cout << "legals call\n";
-    sc::Side t = p.turn;
-    sc::MoveList legals = p.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(p) : sc::standard_moves<sc::BLACK_SIDE>(p);
-
-    // if (legals.empty())
-    //     std::cout << "Checkamte or stalemate\n";
-    // std::cout << "legals call\n";
-
-    auto check_kings = [&](Move m, std::string msg) {
-        if (p.by_type(ROOK) & p.by_type(KING)) {
-            dbg_dump_position(p);
-            std::cout << "HERE! Mov: " << m.long_alg_notation() << msg << "\n";
-            throw std::runtime_error{"3 kings"};
-        }
-    };
+    uint64_t tot = 0;
+    sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
 
     for (const auto &m : legals) {
-        if (m.typeFlags == -1) std::cout << "WHAT?\n";
-        if (m.typeFlags == sc::PROMOTION) store.promotions++;
-        if (m.typeFlags == sc::EN_PASSANT) { store.enPassants++; store.captures++; }
-        if (m.typeFlags == sc::CASTLE) store.castles++;
-        if (p.pieces[m.dst] != sc::NULL_COLORED_TYPE) store.captures++;
-
-        store.line.push_back(m);
-
-        sc::StateInfo undo = sc::make_move(p, m);
-        check_kings(m, " after make_move");
-        
-
-        tot += perft_worker(p, depth - 1, store);
-        sc::unmake_move(p, undo, m);
-        check_kings(m, " after undo_move");
-
-        store.line.pop_back();
-        if (p.turn != t) throw std::runtime_error{"Turn corrupted"};
+        sc::StateInfo undo = sc::make_move(pos, m);
+        tot += perft_worker(pos, depth - 1);
+        sc::unmake_move(pos, undo, m);
     }
 
     return tot;
 }
 
 void perft(Position &pos, int depth) {
-    PerftInfo p;
-    // std::cout << "first legals call\n";
+    uint64_t total = 0;
+    auto start = std::chrono::high_resolution_clock::now();
 
-#define CATCH_ERRORS 0
+    sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
 
-#if CATCH_ERRORS
-     try {
-#endif
-        sc::Side t = pos.turn;
-        sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
-        // std::cout << "past first legals call\n";
-        for (const auto &m : legals) {
-            if (m.typeFlags == -1) std::cout << "WHAT?\n";
-            p.line.push_back(m);
-            sc::StateInfo undo = sc::make_move(pos, m);
-            int res = perft_worker(pos, depth, p);
-            p.nodes += res;
-            std::cout << m.long_alg_notation() << " - " << res << '\n';
-            sc::unmake_move(pos, undo, m);
-            if (pos.turn != t) throw std::runtime_error{"Turn corrupted!"};
-            p.line.pop_back();
-        }
-#if CATCH_ERRORS
-    } catch (const std::exception &e) {
-        std::cout << "Exception: " << e.what();
-        std::cout << "  from line:\n";
-        for (auto mov : p.line)
-            std::cout << "\t" << mov.long_alg_notation();
-        std::cout << "\n";
+    for (const auto &m : legals) {
+        sc::StateInfo undo = sc::make_move(pos, m);
+        uint64_t res = perft_worker(pos, depth - 1);
+        sc::unmake_move(pos, undo, m);
+
+        total += res;
+        std::cout << m.long_alg_notation() << ": " << res << '\n';
     }
-#endif
+    
+    auto duration = std::chrono::high_resolution_clock::now() - start;
+    auto nps = total / (std::chrono::duration_cast<std::chrono::microseconds>(duration).count() / 1000000.0);
 
-    std::cout << "Total on depth " << depth << " = " << p.nodes << "\n";
-    std::cout << "captures " << p.captures << '\n';
-    std::cout << "en passants " << p.enPassants << '\n';
-    std::cout << "castles " << p.castles << '\n';
-    std::cout << "promotions " << p.promotions << '\n';
-    std::cout << "\n\n\n";
+    // mimick stockfish perft output
+    std::cout << "Nodes searched (depth=" << depth << "): " << total << "\n";
+    std::cout << "Speed: " << nps / 1000.0 << " thousand leaf nodes per second\n";
 }
 
 
@@ -173,13 +116,10 @@ int main(int argc, char **argv) {
                 running = false;
                 break;
             case SDL_MOUSEBUTTONDOWN: {
-                // if (!turn) break;
                 sc::Square prev = selected;
                 isSelected ^= true;
 
                 selected = sc::make_square('a' + event.button.x * 8 / w, 8 - event.button.y * 8 / h);
-                std::cout << "Selected " << (int)selected << std::endl;
-                // std::cout << "Selected " << (int) selected.col << ", " << (int) selected.row << std::endl;
 
                 if (!isSelected) { // make the move
                     sc::Move prototype = sc::make_normal(prev, selected);
@@ -194,31 +134,15 @@ int main(int argc, char **argv) {
                     }
 
                     if (!found || (sc::to_bitboard(prev) & pos.by_side(sc::opposite_side(pos.turn)))) {
-                        std::cout << "Illegal move you idiot" << std::endl;
                         legalMoves.clear();
                         break;
                     }
 
-                    std::cout << "GOING!\n";
-
-                    
-                    // if (board.rget(prev.row, prev.col).type == PType::PAWN 
-                    //     && (selected.row == 0 || selected.row == 7)) {
-                    //     mov.doPromote = true;
-                    //     mov.promoteTo = PromoteType::QUEEN; // always promote to queen :/
-                    // }
-
                     undoCaps.push_back(sc::make_move(pos, mov));
                     undoMoves.push_back(mov);
                     legalMoves.clear();
-                    // turn = sc::opposite_side(turn);
-                    // undoMoves.push_back(blackEngine->search(board, false));
-                    // undoCaps.push_back(board.make(undoMoves.back()));
                 } else {
                     legalMoves = pos.turn == WHITE_SIDE ? sc::standard_moves<WHITE_SIDE>(pos) : sc::standard_moves<BLACK_SIDE>(pos);
-                    std::cout << "update legal moves";
-                    // if (board.rget(selected.row, selected.col).isWhite)
-                    //     board.collectMovesFor(selected.row, selected.col, legalMoves);
                 }
 
                 break;
@@ -294,11 +218,11 @@ int main(int argc, char **argv) {
         }
 
         for (sc::Move mov : legalMoves) {
-            auto srcX = sc::file_ind_of(mov.src) * w / 8 + w/16;
-            auto srcY = (7-sc::rank_ind_of(mov.src)) * h / 8 + h/16;
-            auto dstX = sc::file_ind_of(mov.dst) * w / 8 + w/16;
-            auto dstY = (7-sc::rank_ind_of(mov.dst)) * h / 8 + h/16;
-            SDL_RenderDrawLine(rend, srcX, srcY, dstX, dstY);
+            // auto srcX = sc::file_ind_of(mov.src) * w / 8 + w/16;
+            // auto srcY = (7-sc::rank_ind_of(mov.src)) * h / 8 + h/16;
+            // auto dstX = sc::file_ind_of(mov.dst) * w / 8 + w/16;
+            // auto dstY = (7-sc::rank_ind_of(mov.dst)) * h / 8 + h/16;
+            // SDL_RenderDrawLine(rend, srcX, srcY, dstX, dstY);
 
             if (mov.src == selected) {
                 drawArea.x =  sc::file_ind_of(mov.dst) * w / 8;
@@ -306,24 +230,6 @@ int main(int argc, char **argv) {
                 SDL_RenderCopy(rend, moveTex, nullptr, &drawArea);
             }
         }
-
-        // toDraw = board.pseudoLegalMoves(WHITE_SIDE, true);
-        // for (const auto i : toDraw) {
-        //     // if (board.rget(i.srcRow, i.srcCol).type == PType::KING)
-        //     SDL_RenderDrawLine(rend, i.srcCol * w/8 + w/16, i.srcRow * h/8 + h/16, i.dstCol * w/8 + w/16, i.dstRow * h/8 + h/16);
-        // }
-
-        // for (int i = undoMoves.size() - 2; i > 0 && i < undoMoves.size(); i++) {
-        //     auto m = undoMoves[i];
-        //     SDL_RenderDrawLine(rend, m.srcCol * w/8 + w/16, m.srcRow * h/8 + h/16, m.dstCol * w/8 + w/16, m.dstRow * h/8 + h/16);
-        // }
-
-        // SDL_Rect moveDst = {0, 0, w / 8, h / 8};
-        // for (const auto i : legalMoves) {
-        //     moveDst.x = i.dstCol * w/8;
-        //     moveDst.y = i.dstRow * h/8;
-        //     SDL_RenderCopy(rend, moveTex, NULL, &moveDst);
-        // }
 
         if (isSelected) {
             SDL_Rect dstRect;

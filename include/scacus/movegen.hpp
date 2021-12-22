@@ -53,7 +53,7 @@ namespace sc {
 
 
     template <Side SIDE>
-    static constexpr inline uint64_t en_passant_is_legal(const Position &pos, const Bitboard possiblePinners, const Square sq);
+    static constexpr inline uint64_t en_passant_is_legal(const Position &pos, const Square sq);
 
     // checks if there is no check given by checker with the given occupancy bits
     static constexpr inline bool check_resolved(const Position &pos, const Bitboard occ, const Bitboard checker, const Bitboard kingBB) {
@@ -86,10 +86,6 @@ namespace sc {
         Square king = std::countr_zero<uint64_t>(kingBB);
         // is seperating these into two passes of rooks/queens + bishops/queens worth it?
 
-        // // mask of possible pieces that can be checking the king
-        // // QUEEN_MOVES + BISHOP_MOVES covers pawns and opposing king
-        // Bitboard checkersMask = lookup<ROOK_MAGICS>(king,  occ) | lookup<BISHOP_MAGICS>(king, occ) | KNIGHT_MOVES[king];
-        // // is computing the checkers mask even worth it? Would just looping through all opponent pieces be faster?
         Bitboard opposingIter = pos.by_side(opposite_side(SIDE));
         Bitboard checkers = 0;
         Bitboard checkerAttk = 0; // squares attacked by checker (set to the last checker found)
@@ -138,7 +134,11 @@ namespace sc {
             }
         }
 
+
+        // QUEEN_MOVES + BISHOP_MOVES covers pawns and opposing king
+        // is computing the checkers mask even worth it? Would just looping through all opponent pieces be faster?
         opposingIter = pos.by_side(opposite_side(SIDE));
+        // mask of possible pieces that can be checking the king
         Bitboard possiblePinners = opposingIter & (pos.by_type(QUEEN) | pos.by_type(ROOK) | pos.by_type(BISHOP));
         // blocked by opposing pieces, ignoring own pieces.
         Bitboard pinLines = lookup<ROOK_MAGICS>(king, opposingIter) | lookup<BISHOP_MAGICS>(king, opposingIter);
@@ -193,13 +193,10 @@ namespace sc {
             maybePinned ^= bb; // add it back
         }
 
-        Bitboard iter = pos.by_side(SIDE); // & ~pinned
+        Bitboard iter = pos.by_side(SIDE);
         Bitboard attk = 0;
 
         if (checkers) { // i.e: in check
-            // std::cout << "CHECKERS\n";
-            // print_bb(checkers);
-
 
             Square sq;
 
@@ -268,7 +265,7 @@ namespace sc {
 
                         Bitboard enPassant = to_bitboard(pos.state.enPassantTarget); // will be 0 if enPassantTarget is NULL_SQUARE
                         if (enPassant & attk) {
-                            if (en_passant_is_legal<SIDE>(pos, possiblePinners, sq)) {
+                            if (en_passant_is_legal<SIDE>(pos, sq)) {
                                 // now check if this en passant resolves the check!
                                 Bitboard testOcc = occ;
                                 testOcc ^= to_bitboard(sq); // this piece has moved
@@ -397,7 +394,7 @@ namespace sc {
 
                 Bitboard enPassant = to_bitboard(pos.state.enPassantTarget); // will be 0 if enPassantTarget is NULL_SQUARE
                 if (enPassant & attk) {
-                    if (en_passant_is_legal<SIDE>(pos, possiblePinners, sq)) // en_passant_is_legal implicitly handles pinned pawns.
+                    if (en_passant_is_legal<SIDE>(pos, sq)) // en_passant_is_legal implicitly handles pinned pawns.
                         ret.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
                 }
 
@@ -433,7 +430,7 @@ namespace sc {
     }
 
     template <Side SIDE>
-    static constexpr inline uint64_t en_passant_is_legal(const Position &pos, const Bitboard possiblePinners, const Square sq) {
+    static constexpr inline uint64_t en_passant_is_legal(const Position &pos, const Square sq) {
         // here we need to consider if taking en passant will reveal a check
         // for example, in `3k4/8/8/1KPp3r/8/8/8/8 w - d6 0 1`,
         // the pawn taking en passant is not pinned, but doing so
@@ -441,6 +438,8 @@ namespace sc {
 
         Bitboard testOcc = pos.by_side(WHITE_SIDE) | pos.by_side(BLACK_SIDE);
         Bitboard kingBB = pos.by_side(SIDE) & pos.by_type(KING);
+        Square kingSq = std::countr_zero(kingBB);
+
         // this piece has moved away, and the en passant target has been captured
         // enPassantTarget points to the square "behind" the pawn, so we have to add an offset.
         testOcc ^= to_bitboard(sq);
@@ -448,7 +447,14 @@ namespace sc {
         testOcc |= to_bitboard(pos.state.enPassantTarget);
         testOcc ^= to_bitboard(pos.state.enPassantTarget + (SIDE == WHITE_SIDE ? Dir::S : Dir::N));
         uint64_t illegal = false; // or should i use bool and ?1:0
-        Bitboard pinnerIter = possiblePinners;
+
+        // here, possible pinners MUST be recalculated because
+        // the en passant might remove a pawn that was previously preventing
+        // another piece from being pinned
+        // see 8/2p5/3p4/KP5r/1R3pPk/8/4P3/8 b - g3 0 1
+        Bitboard pinnerIter = pos.by_side(opposite_side(SIDE)) & (pos.by_type(BISHOP) | pos.by_type(ROOK) | pos.by_type(QUEEN));
+        pinnerIter &= pseudo_attacks<ROOK_MAGICS>(kingSq) | pseudo_attacks<BISHOP_MAGICS>(kingSq); // is this computation even worth the time it saves in the loop?
+
         while (!illegal && pinnerIter) {
             Square pinnerSq = pop_lsb(pinnerIter);
 

@@ -217,23 +217,14 @@ namespace sc {
             pos.state.capturedPiece = pos.pieces[mov.dst];
 
             Type movedType = type_of(pos.pieces[mov.src]);
-            if (movedType == 0) { 
-                dbg_dump_position(pos); 
-                std::cout << mov.long_alg_notation() << '\n';
-                std::cout << (int) mov.typeFlags << '\n';
-                throw std::runtime_error{"move from null"}; 
-            }
-
             pos.clear(mov.dst);
             pos.set(mov.dst, movedType, pos.turn);
             pos.clear(mov.src);
 
             switch (movedType) {
             case PAWN: 
-                if (std::abs((int) mov.dst - (int) mov.src) == Dir::N * 2) {
+                if (std::abs((int) mov.dst - (int) mov.src) == Dir::N * 2)
                     pos.state.enPassantTarget = mov.dst + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
-                    // std::cout << "ADD EP TARG " << (int) pos.state.enPassantTarget << '\n';
-                }
                 break;
             case KING:
                 completely_forbid_castling();
@@ -263,7 +254,6 @@ namespace sc {
         case EN_PASSANT: {
             // use enPassantTarget from ret: pos.state.enPassant target has already been set to null.
             Square capturedPawn = ret.enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
-            // std::cout << "domove CapturedPawn = " << (int) capturedPawn << std::endl;
             pos.state.capturedPiece = pos.pieces[capturedPawn];
             pos.clear(capturedPawn);
             pos.clear(mov.src);
@@ -303,7 +293,6 @@ namespace sc {
             break;
         case EN_PASSANT: {
             Square captureSq = info.enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
-            // std::cout << "undomove captureSq = " << (int) captureSq << std::endl;
             pos.set(captureSq, PAWN, opposite_side(pos.turn));
             pos.clear(mov.dst);
             pos.set(mov.src, PAWN, pos.turn);
