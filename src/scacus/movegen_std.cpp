@@ -139,6 +139,7 @@ namespace sc {
                     update_pin_info();
                     break;
                 default:
+                    dbg_dump_position(pos);
                     throw std::runtime_error{"Non bishop/rook/queen pinner? (from pinner calculation loop)"};
                 }
             }
@@ -216,7 +217,7 @@ namespace sc {
                         attk = PAWN_ATTACKS[SIDE][sq];
 
                         Bitboard enPassant = to_bitboard(pos.state.enPassantTarget); // will be 0 if enPassantTarget is NULL_SQUARE
-                        if (enPassant & attk) {
+                        if ((enPassant & attk) && pos.state.enPassantTarget != NULL_SQUARE) {
                             if (en_passant_is_legal<SIDE>(pos, sq)) {
                                 // now check if this en passant resolves the check!
                                 Bitboard testOcc = occ;
@@ -371,7 +372,7 @@ namespace sc {
                 attk = PAWN_ATTACKS[SIDE][sq];
 
                 Bitboard enPassant = to_bitboard(pos.state.enPassantTarget); // will be 0 if enPassantTarget is NULL_SQUARE
-                if (enPassant & attk) {
+                if ((enPassant & attk) && pos.state.enPassantTarget != NULL_SQUARE) {
                     if (en_passant_is_legal<SIDE>(pos, sq)) // en_passant_is_legal implicitly handles pinned pawns.
                         ret.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
                 }

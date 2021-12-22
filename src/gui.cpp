@@ -129,6 +129,7 @@ int main(int argc, char **argv) {
                     sc::Move mov;
                     bool found = false;
                     for (const auto m : legalMoves) {
+                        if (m.typeFlags == PROMOTION && m.promote != PROMOTE_ROOK) continue;
                         found |= (m.src == prototype.src && m.dst == prototype.dst);
                         if (found) {
                             mov = m;
@@ -144,6 +145,11 @@ int main(int argc, char **argv) {
                     undoCaps.push_back(sc::make_move(pos, mov));
                     undoMoves.push_back(mov);
                     legalMoves.clear();
+
+                    // auto engineMove = sc::primitive_search(pos, 1);
+                    // undoCaps.push_back(sc::make_move(pos, engineMove.first));
+                    // undoMoves.push_back(engineMove.first);
+                    // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                 } else {
                     legalMoves = pos.turn == WHITE_SIDE ? sc::standard_moves<WHITE_SIDE>(pos) : sc::standard_moves<BLACK_SIDE>(pos);
                 }
@@ -184,7 +190,7 @@ int main(int argc, char **argv) {
                     // turn ^= true;
                     break;
                 case SDLK_g: {
-                    auto engineMove = sc::primitive_search(pos, 4);
+                    auto engineMove = sc::primitive_search(pos, 3);
                     undoCaps.push_back(sc::make_move(pos, engineMove.first));
                     undoMoves.push_back(engineMove.first);
                     std::cout << "Engine evaluation: " << engineMove.second << "\n";

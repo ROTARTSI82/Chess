@@ -1,8 +1,13 @@
 #include "scacus/engine.hpp"
 
 namespace sc {
+
+    // We can't actually use min because -min is not max! In fact, -min is negative! 
+    constexpr auto NEARLY_MIN = std::numeric_limits<int>::min() + 4;
+    constexpr auto ACTUAL_MIN = std::numeric_limits<int>::min() + 2;
+
     static inline int eval(Position &pos, const MoveList &legalMoves) {
-        if (legalMoves.empty()) return pos.isInCheck ? std::numeric_limits<int>::min() + 2 : 0;
+        if (legalMoves.empty()) return pos.isInCheck ? NEARLY_MIN : 0;
 
         auto count = [&](const Type t) {
             return popcnt(pos.by_side(pos.turn) & pos.by_type(t)) - popcnt(pos.by_side(opposite_side(pos.turn)) & pos.by_type(t));
@@ -17,20 +22,17 @@ namespace sc {
         auto legalMoves = pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
         int stand_pat = eval(pos, legalMoves);
         if (stand_pat >= beta)
-            return beta;
-        if (alpha < stand_pat)
-            alpha = stand_pat;
+            return stand_pat;
+        alpha = std::max(stand_pat, alpha);
 
         for (const auto mov : legalMoves) {
-            // mov.typeFlags == EN_PASSANT ||
-            // TODO: not searching en passants right now bc they are buggy
-            if ((pos.by_side(opposite_side(pos.turn)) & to_bitboard(mov.dst)) && mov.typeFlags != EN_PASSANT) {
+            if ((pos.by_side(opposite_side(pos.turn)) & to_bitboard(mov.dst)) || mov.typeFlags == EN_PASSANT) {
                 auto undo = sc::make_move(pos, mov);
                 int score = -quiescence_search(pos, -beta, -alpha);
                 sc::unmake_move(pos, undo, mov);
 
                 if (score >= beta)
-                    return beta;
+                    return score;
                 alpha = std::max(alpha, score);
             }
         }
@@ -46,16 +48,16 @@ namespace sc {
 
         auto legalMoves = pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
         if (legalMoves.empty())
-            return pos.isInCheck ? std::numeric_limits<int>::min() + 2 : 0;
+            return pos.isInCheck ? NEARLY_MIN : 0;
 
-        int value = std::numeric_limits<int>::min() + 2;
+        int value = ACTUAL_MIN;
         for (const auto mov : legalMoves) {
             auto undoInfo = sc::make_move(pos, mov);
-            auto result = primitive_eval(pos, -beta, -alpha, depth - 1);
+            auto result = -primitive_eval(pos, -beta, -alpha, depth - 1);
             sc::unmake_move(pos, undoInfo, mov);
 
-            value = std::max(value, -result);
-            if (value > beta)
+            value = std::max(value, result);
+            if (value >= beta)
                 return value;
             
             alpha = std::max(value, alpha);
@@ -75,14 +77,14 @@ namespace sc {
         std::mutex mtx;
         std::atomic_int value;
         std::atomic_int alpha;
-        value.store(std::numeric_limits<int>::min());
-        alpha.store(std::numeric_limits<int>::min());
+        value.store(ACTUAL_MIN);
+        alpha.store(ACTUAL_MIN);
 
         auto currentMov = make_normal(0, 0);
         for (int i = 0; i < legalMoves.size(); i++) {
             auto do_work = [&, mov{legalMoves.at(i)}, cpy{pos}]() mutable {
                 auto undoInfo = sc::make_move(cpy, mov);
-                int result = -primitive_eval(cpy, std::numeric_limits<int>::min() + 2, -alpha, depth - 1);
+                int result = -primitive_eval(cpy, ACTUAL_MIN, -alpha, depth - 1);
                 sc::unmake_move(cpy, undoInfo, mov);
 
                 std::lock_guard<std::mutex> lg(mtx);
