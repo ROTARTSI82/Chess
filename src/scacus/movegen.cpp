@@ -195,10 +195,21 @@ namespace sc {
 
         pos.state.enPassantTarget = NULL_SQUARE;
 
-        const auto remove_castling_rights = [&](const Square rookSq) {
-            CastlingRights mask = file_ind_of(rookSq) == 0 ? QUEENSIDE_MASK : KINGSIDE_MASK;
-            if (pos.turn == WHITE_SIDE) mask <<= 2;
+        const auto remove_castling_rights = [&](const Square rookSq, Side side) {
+            const auto file = file_ind_of(rookSq);
+            const auto rank = rank_ind_of(rookSq);
+
+            // this rook is not on a square of a castling rook, so it does not affect castling rights.
+            if ((file != 0 && file != 7) || (rank != 0 && rank != 7)) return;
+
+            CastlingRights mask = file == 0 ? QUEENSIDE_MASK : KINGSIDE_MASK;
+
+            if (side == WHITE_SIDE) mask <<= 2;
             pos.state.castlingRights &= ~mask;
+        };
+
+        const auto completely_forbid_castling = [&]() {
+            pos.state.castlingRights &= ~((KINGSIDE_MASK | QUEENSIDE_MASK) << (pos.turn == WHITE_SIDE ? 2 : 0));
         };
 
         switch (mov.typeFlags) {
@@ -206,6 +217,12 @@ namespace sc {
             pos.state.capturedPiece = pos.pieces[mov.dst];
 
             Type movedType = type_of(pos.pieces[mov.src]);
+            if (movedType == 0) { 
+                dbg_dump_position(pos); 
+                std::cout << mov.long_alg_notation() << '\n';
+                std::cout << (int) mov.typeFlags << '\n';
+                throw std::runtime_error{"move from null"}; 
+            }
 
             pos.clear(mov.dst);
             pos.set(mov.dst, movedType, pos.turn);
@@ -219,10 +236,10 @@ namespace sc {
                 }
                 break;
             case KING:
-                pos.state.castlingRights &= ~((KINGSIDE_MASK | QUEENSIDE_MASK) << (pos.turn == WHITE_SIDE ? 2 : 0));
+                completely_forbid_castling();
                 break;
             case ROOK: {
-                remove_castling_rights(mov.src);
+                remove_castling_rights(mov.src, pos.turn);
                 break;
             }
             default:
@@ -240,7 +257,7 @@ namespace sc {
             pos.clear(targetRook);
             pos.set(rookNewDst, ROOK, pos.turn);
 
-            remove_castling_rights(targetRook);
+            completely_forbid_castling();
             break;
         }
         case EN_PASSANT: {
@@ -260,6 +277,9 @@ namespace sc {
             pos.set(mov.dst, static_cast<Type>((int) mov.promote + 2), pos.turn);
             break;
         }
+
+        if (type_of(pos.state.capturedPiece) == ROOK)
+            remove_castling_rights(mov.dst, side_of(pos.state.capturedPiece));
 
         pos.turn = opposite_side(pos.turn);
         return ret;

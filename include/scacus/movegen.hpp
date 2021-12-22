@@ -65,8 +65,12 @@ namespace sc {
             return !(lookup<ROOK_MAGICS>(sq, occ) & kingBB);
         case BISHOP:
             return !(lookup<BISHOP_MAGICS>(sq, occ) & kingBB);
+        case PAWN:
+            return !(PAWN_ATTACKS[side_of(pos.pieces[sq])][sq] & kingBB);
+        case KNIGHT:
+            return !(KNIGHT_MOVES[sq] & kingBB);
         default:
-            return false; // we cannot block and resolve a check from a non-bishop/rook/queen.
+            throw std::runtime_error{"We're being checked by the opposing king? what?"};
         }
     }
 

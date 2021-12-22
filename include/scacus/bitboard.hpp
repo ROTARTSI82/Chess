@@ -96,6 +96,7 @@ namespace sc {
     inline constexpr Side opposite_side(const Side s) { return static_cast<Side>((uint8_t) s ^ 1); }
 
     inline constexpr ColoredType make_ColoredType(const Type t, const Side s) {
+        if (t == 0) throw std::runtime_error{"make colored type with null"};        
         return static_cast<ColoredType>((int) t | (s == WHITE_SIDE ? 8 : 0));
     }
 

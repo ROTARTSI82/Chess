@@ -6,10 +6,108 @@
 #include <iostream>
 
 #include "scacus/movegen.hpp"
+#include "scacus/engine.hpp"
 
 #if 1
 
 using namespace sc;
+
+struct PerftInfo {
+    int nodes = 0;
+    int castles = 0;
+    int promotions = 0;
+    int captures = 0;
+    int enPassants = 0;
+    std::vector<Move> line;
+};
+
+int perft_worker(sc::Position &p, int depth, PerftInfo &store) {
+    if (depth == 0)
+        return 1;
+    
+
+    int tot = 0;
+    // std::cout << "legals call\n";
+    sc::Side t = p.turn;
+    sc::MoveList legals = p.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(p) : sc::standard_moves<sc::BLACK_SIDE>(p);
+
+    // if (legals.empty())
+    //     std::cout << "Checkamte or stalemate\n";
+    // std::cout << "legals call\n";
+
+    auto check_kings = [&](Move m, std::string msg) {
+        if (p.by_type(ROOK) & p.by_type(KING)) {
+            dbg_dump_position(p);
+            std::cout << "HERE! Mov: " << m.long_alg_notation() << msg << "\n";
+            throw std::runtime_error{"3 kings"};
+        }
+    };
+
+    for (const auto &m : legals) {
+        if (m.typeFlags == -1) std::cout << "WHAT?\n";
+        if (m.typeFlags == sc::PROMOTION) store.promotions++;
+        if (m.typeFlags == sc::EN_PASSANT) { store.enPassants++; store.captures++; }
+        if (m.typeFlags == sc::CASTLE) store.castles++;
+        if (p.pieces[m.dst] != sc::NULL_COLORED_TYPE) store.captures++;
+
+        store.line.push_back(m);
+
+        sc::StateInfo undo = sc::make_move(p, m);
+        check_kings(m, " after make_move");
+        
+
+        tot += perft_worker(p, depth - 1, store);
+        sc::unmake_move(p, undo, m);
+        check_kings(m, " after undo_move");
+
+        store.line.pop_back();
+        if (p.turn != t) throw std::runtime_error{"Turn corrupted"};
+    }
+
+    return tot;
+}
+
+void perft(Position &pos, int depth) {
+    PerftInfo p;
+    // std::cout << "first legals call\n";
+
+#define CATCH_ERRORS 0
+
+#if CATCH_ERRORS
+     try {
+#endif
+        sc::Side t = pos.turn;
+        sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
+        // std::cout << "past first legals call\n";
+        for (const auto &m : legals) {
+            if (m.typeFlags == -1) std::cout << "WHAT?\n";
+            p.line.push_back(m);
+            sc::StateInfo undo = sc::make_move(pos, m);
+            int res = perft_worker(pos, depth, p);
+            p.nodes += res;
+            std::cout << m.long_alg_notation() << " - " << res << '\n';
+            sc::unmake_move(pos, undo, m);
+            if (pos.turn != t) throw std::runtime_error{"Turn corrupted!"};
+            p.line.pop_back();
+        }
+#if CATCH_ERRORS
+    } catch (const std::exception &e) {
+        std::cout << "Exception: " << e.what();
+        std::cout << "  from line:\n";
+        for (auto mov : p.line)
+            std::cout << "\t" << mov.long_alg_notation();
+        std::cout << "\n";
+    }
+#endif
+
+    std::cout << "Total on depth " << depth << " = " << p.nodes << "\n";
+    std::cout << "captures " << p.captures << '\n';
+    std::cout << "en passants " << p.enPassants << '\n';
+    std::cout << "castles " << p.castles << '\n';
+    std::cout << "promotions " << p.promotions << '\n';
+    std::cout << "\n\n\n";
+}
+
 
 int main(int argc, char **argv) {
     sc::init_movegen();
@@ -44,7 +142,7 @@ int main(int argc, char **argv) {
     SDL_Texture *font[] = {
         nullptr, tex("bking.png"), tex("bqueen.png"), tex("brook.png"), tex("bbishop.png"), tex("bknight.png"), tex("bpawn.png"),
         tex("red.png"), 
-        tex("red.png"), tex("wking.png"), tex("wqueen.png"), tex("wrook.png"), tex("wbishop.png"), tex("wknight.png"), tex("wpawn.png"),
+        tex("connect4.png"), tex("wking.png"), tex("wqueen.png"), tex("wrook.png"), tex("wbishop.png"), tex("wknight.png"), tex("wpawn.png"),
         tex("yellow.png"), tex("yellow.png")
     };
 
@@ -88,7 +186,8 @@ int main(int argc, char **argv) {
                     sc::Move mov;
                     bool found = false;
                     for (const auto m : legalMoves) {
-                        if (found |= (m.src == prototype.src && m.dst == prototype.dst)) {
+                        found |= (m.src == prototype.src && m.dst == prototype.dst);
+                        if (found) {
                             mov = m;
                             break;
                         }
@@ -99,6 +198,8 @@ int main(int argc, char **argv) {
                         legalMoves.clear();
                         break;
                     }
+
+                    std::cout << "GOING!\n";
 
                     
                     // if (board.rget(prev.row, prev.col).type == PType::PAWN 
@@ -111,7 +212,6 @@ int main(int argc, char **argv) {
                     undoMoves.push_back(mov);
                     legalMoves.clear();
                     // turn = sc::opposite_side(turn);
-
                     // undoMoves.push_back(blackEngine->search(board, false));
                     // undoCaps.push_back(board.make(undoMoves.back()));
                 } else {
@@ -124,7 +224,9 @@ int main(int argc, char **argv) {
                 break;
             }
             case SDL_KEYDOWN: {
-                switch (event.key.keysym.sym) {
+                if (SDLK_0 <= event.key.keysym.sym && event.key.keysym.sym <= SDLK_9) {
+                    perft(pos, event.key.keysym.sym - SDLK_0);
+                } else switch (event.key.keysym.sym) {
                 case SDLK_f:
                     std::cout << pos.get_fen() << std::endl;
                     break;
@@ -154,8 +256,13 @@ int main(int argc, char **argv) {
                     undoCaps.pop_back(); undoMoves.pop_back();
                     // turn ^= true;
                     break;
-                case SDLK_s:
+                case SDLK_g: {
+                    auto engineMove = sc::primitive_search(pos, 7);
+                    undoCaps.push_back(sc::make_move(pos, engineMove.first));
+                    undoMoves.push_back(engineMove.first);
+                    std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;
+                }
                 case SDLK_i:
                     std::cout << "ENTER FEN> ";
                     std::string fen;
