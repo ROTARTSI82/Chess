@@ -224,7 +224,8 @@ namespace sc {
                                 testOcc |= enPassant; // move to the target square
                                 testOcc ^= to_bitboard(pos.state.enPassantTarget + (SIDE == WHITE_SIDE ? Dir::S : Dir::N)); // other has been captured
 
-                                if (check_resolved(pos, testOcc, checkers, kingBB))
+                                if (get_lsb(checkers) + (SIDE == WHITE_SIDE ? Dir::N : Dir::S) == pos.state.enPassantTarget // we just captured the checker! we're out of check now
+                                    || check_resolved(pos, testOcc, checkers, kingBB))
                                     ret.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
                             }
                         }

@@ -55,7 +55,7 @@ namespace sc {
             } else if (line.rfind("go", 0) == 0) {
                 // go = true;
                 // mainToWorker.notify_all();
-                COUT << "bestmove " << primitive_search(pos, 3).first.long_alg_notation() << '\n';
+                COUT << "bestmove " << primitive_search(pos, 4).first.long_alg_notation() << '\n';
             } else if (line == "quit") {
                 running = false;
             } else if (line == "d") {

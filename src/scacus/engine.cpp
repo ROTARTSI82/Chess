@@ -46,7 +46,7 @@ namespace sc {
 
         auto legalMoves = pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
         if (legalMoves.empty())
-            return std::numeric_limits<int>::min() + 2; // TODO: differentiate stalemate & checkmate
+            return pos.isInCheck ? std::numeric_limits<int>::min() + 2 : 0;
 
         int value = std::numeric_limits<int>::min() + 2;
         for (const auto mov : legalMoves) {
@@ -73,8 +73,10 @@ namespace sc {
             std::thread *workers = new std::thread[legalMoves.size()];
         #endif
         std::mutex mtx;
-        std::atomic_int value = std::numeric_limits<int>::min() + 2;
-        std::atomic_int alpha = std::numeric_limits<int>::min() + 2;
+        std::atomic_int value;
+        std::atomic_int alpha;
+        value.store(std::numeric_limits<int>::min());
+        alpha.store(std::numeric_limits<int>::min());
 
         auto currentMov = make_normal(0, 0);
         for (int i = 0; i < legalMoves.size(); i++) {
@@ -83,7 +85,7 @@ namespace sc {
                 int result = -primitive_eval(cpy, std::numeric_limits<int>::min() + 2, -alpha, depth - 1);
                 sc::unmake_move(cpy, undoInfo, mov);
 
-                std::lock_guard lg(mtx);
+                std::lock_guard<std::mutex> lg(mtx);
                 value = std::max(value.load(), result);
                 if (value > alpha) {
                     currentMov = mov;

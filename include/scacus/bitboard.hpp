@@ -227,4 +227,8 @@ namespace sc {
         return ret;
     }
 
+    constexpr inline int get_lsb(const uint64_t x) {
+        return std::__countr_zero(x);
+    }
+
 }
