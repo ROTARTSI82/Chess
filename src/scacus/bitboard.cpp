@@ -48,7 +48,11 @@ namespace sc {
         throw std::runtime_error{"Invalid char passed to coloredTypeFromChar"};
     }
 
-    Position::Position(const std::string &fen, int *store) {
+    Position::Position(const std::string &fen) {
+        set_state_from_fen(fen);
+    }
+
+    void Position::set_state_from_fen(const std::string &fen, int *store) {
         for (int i = 0; i < BOARD_SIZE; i++) pieces[i] = NULL_COLORED_TYPE;
         for (int i = 0; i < NUM_UNCOLORED_PIECE_TYPES; i++) byType[i] = 0;
         for (int i = 0; i < NUM_SIDES; i++) byColor[i] = 0;
@@ -75,6 +79,7 @@ namespace sc {
         }
 
         i++; // skip the space
+
         turn = fen.at(i++) == 'w' ? WHITE_SIDE : BLACK_SIDE;
 
         state.castlingRights = 0;
@@ -86,7 +91,7 @@ namespace sc {
                 if (isupper(c)) whichBit <<= 2; // white gets left shifted
                 state.castlingRights |= whichBit;
             }
-        }
+        } else { i++; }
 
         if (fen.at(++i) != '-') { // skip over space and get next char
             state.enPassantTarget = make_square(fen.at(i), fen.at(i + 1) - '0');
@@ -102,13 +107,14 @@ namespace sc {
         // some fens don't include the halfmove/fullmove numbers for some reason?
         try {
             state.halfmoves = std::stoi(fen.substr(i), &offset);
-            fullmoves = std::stoi(fen.substr(i + offset), &offset);
+            i += offset;
+            fullmoves = std::stoi(fen.substr(i), &offset);
         } catch (const std::exception &e) {
             state.halfmoves = 0;
             fullmoves = 1;
         }
 
-        if (store) *store = i + offset;
+        if (store) *store = (i + offset);
     }
 
     std::string Position::get_fen() const {

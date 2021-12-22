@@ -6,7 +6,7 @@
 #include <iostream>
 
 #include "scacus/movegen.hpp"
-#include "scacus/engine.hpp"
+#include "scacus/uci.hpp"
 
 #if 1
 
@@ -53,6 +53,9 @@ void perft(Position &pos, int depth) {
 
 
 int main(int argc, char **argv) {
+    sc::UCI().run();
+    return 0;
+
     sc::init_movegen();
 
     // retutns zero on success else non-zero

@@ -108,6 +108,8 @@ namespace sc {
                (side_of(t) == BLACK_SIDE ? 'a' - 'A' : 0); // make lowercase if black
     }
 
+    Type type_from_char(const char c);
+
     typedef uint8_t CastlingRights;
 
     // rule: shift left 2 if white
@@ -173,9 +175,12 @@ namespace sc {
 
     class Position {
     public:
-        explicit Position(const std::string &fen, int *store = nullptr); // store: Used to store the index into the string that we read to
+        explicit Position(const std::string &fen); 
         Position() : Position(std::string{STARTING_POS_FEN}) {};
         std::string get_fen() const;
+
+        // store: Used to store the index into the string that we read to
+        void set_state_from_fen(const std::string &fen, int *store = nullptr);
 
         inline void set(const Square p, const Type type, const Side side) {
             pieces[p] = make_ColoredType(type, side);
@@ -201,6 +206,7 @@ namespace sc {
 
         StateInfo state;
         Side turn = WHITE_SIDE;
+        bool isInCheck = false; // this flag is set by standard_moves() if it detects that the side it generated moves for is in check.
     };
 
     void dbg_dump_position(const Position &pos);
