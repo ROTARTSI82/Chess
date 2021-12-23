@@ -10,6 +10,10 @@ namespace sc {
     class UCI;
     void workerFunc(UCI *);
 
+    enum class Variant {
+        STANDARD, ANTICHESS,
+    };
+
 
     class UCI {
     public:
@@ -33,5 +37,7 @@ namespace sc {
         bool running = true;
         bool readyok = false;
         bool go = false;
+
+        Variant variant = Variant::STANDARD;
     };
 }

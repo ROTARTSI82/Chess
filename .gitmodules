@@ -4,3 +4,6 @@
 [submodule "dep/lc0"]
 	path = dep/lc0
 	url = git@github.com:LeelaChessZero/lc0.git
+[submodule "dep/Fairy-Stockfish"]
+	path = dep/Fairy-Stockfish
+	url = https://github.com/ianfab/Fairy-Stockfish

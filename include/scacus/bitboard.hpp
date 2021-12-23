@@ -9,6 +9,7 @@
 #include <array>
 
 #include <bitset>
+#include <random>
 
 namespace sc {
     constexpr auto BOARD_SIZE = 64;
@@ -229,6 +230,14 @@ namespace sc {
 
     constexpr inline int get_lsb(const uint64_t x) {
         return std::__countr_zero(x);
+    }
+
+    template <typename T>
+    inline T rand_of(const std::vector<T> &vec) {
+        static std::random_device rng;
+        static std::mt19937_64 mt(rng());
+        std::uniform_int_distribution<int> dist(0, vec.size() - 1);
+        return vec.at(dist(mt));
     }
 
 }
