@@ -11,6 +11,8 @@
 #include <bitset>
 #include <random>
 
+#include <unordered_map>
+
 namespace sc {
     constexpr auto BOARD_SIZE = 64;
     constexpr auto STARTING_POS_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -217,6 +219,8 @@ namespace sc {
         ColoredType pieces[BOARD_SIZE];
         Bitboard byColor[NUM_SIDES]; // black = 0 white = 1
         Bitboard byType[NUM_UNCOLORED_PIECE_TYPES];
+
+        std::unordered_map<uint64_t, int8_t> threefoldTable;
 
         StateInfo state;
         Side turn = WHITE_SIDE;

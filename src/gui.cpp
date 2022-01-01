@@ -68,6 +68,7 @@ int main(int argc, char **argv) {
 
     sc::Bitboard drawBb = 0;
     sc::DefaultEngine eng;
+    eng.pos = &pos;
 
     // annimation loop
     while (running) {
@@ -153,8 +154,11 @@ int main(int argc, char **argv) {
                     break;
                 case SDLK_g: {
                     // auto engineMove = eng.primitive_search(pos, 3);
-                    // undoCaps.push_back(sc::make_move(pos, engineMove.first));
-                    // undoMoves.push_back(engineMove.first);
+                    eng.start_search(999);
+                    std::this_thread::sleep_for(std::chrono::seconds(3));
+                    eng.stop_search();
+                    undoCaps.push_back(sc::make_move(pos, eng.bestMove));
+                    undoMoves.push_back(eng.bestMove);
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;
                 }

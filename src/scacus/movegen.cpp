@@ -330,10 +330,13 @@ namespace sc {
 
         pos.turn = opposite_side(pos.turn);
         pos.state.hash ^= zob_IsWhiteTurn; // no need to reset because it is stored in state!
+        pos.threefoldTable[pos.state.hash]++;
         return ret;
     }
 
     void unmake_move(Position &pos, const StateInfo &info, const Move mov) {
+        pos.threefoldTable[pos.state.hash]--;
+
         pos.turn = opposite_side(pos.turn);
         if (pos.turn == BLACK_SIDE) pos.fullmoves--;
 

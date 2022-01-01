@@ -4,7 +4,7 @@
 namespace sc {
 
     // We can't actually use min because -min is not max! In fact, -min is negative! 
-    constexpr auto NEARLY_MIN = std::numeric_limits<int>::min() + 128;
+    constexpr auto NEARLY_MIN = std::numeric_limits<int>::min() + 4096;
     constexpr auto ACTUAL_MIN = std::numeric_limits<int>::min() + 2;
 
     class Searcher {
@@ -15,7 +15,9 @@ namespace sc {
         DefaultEngine *eng;
 
         inline int eval(const MoveList &legalMoves) {
-            if (legalMoves.empty()) return pos->isInCheck ? NEARLY_MIN - depth : 0;
+            if (legalMoves.empty())
+                return pos->isInCheck ? NEARLY_MIN - depth : 0;
+            if (pos->state.halfmoves >= 50 || pos->threefoldTable[pos->state.hash] >= 3) return 0;
 
             auto count = [&](const Type t) {
                 return popcnt(pos->by_side(pos->turn) & pos->by_type(t)) - popcnt(pos->by_side(opposite_side(pos->turn)) & pos->by_type(t));
@@ -29,7 +31,7 @@ namespace sc {
         inline int quiescence_search(int alpha, int beta) {
             auto legalMoves = legal_moves_from(*pos);
             int stand_pat = eval(legalMoves);
-            if (stand_pat >= beta || !eng->continueSearch)
+            if (stand_pat >= beta || !eng->continueSearch || legalMoves.empty() || pos->state.halfmoves >= 50 || pos->threefoldTable[pos->state.hash] >= 3)
                 return stand_pat;
             alpha = std::max(stand_pat, alpha);
 
@@ -63,16 +65,17 @@ namespace sc {
             auto legalMoves = legal_moves_from(*pos);
             if (legalMoves.empty())
                 return pos->isInCheck ? NEARLY_MIN - depth : 0;
+            if (pos->state.halfmoves >= 50 || pos->threefoldTable[pos->state.hash] >= 3) return 0;
 
             std::unique_lock<std::mutex> lg(eng->ttMtx);
             if (eng->tt.count(pos->state.hash) > 0) {
                 Transposition &val = eng->tt.at(pos->state.hash);
                 eng->ttHits++;
-                if (val.depth >= depth) return val.score;
-                Move chosenOne = val.bestMove;
                 lg.unlock();
-
-                eng->order_moves(legalMoves, chosenOne);
+                // if (val.depth >= depth) return val.score;
+                eng->order_moves(legalMoves, val.bestMove);
+                // alpha = std::max(alpha, val.alpha);
+                // beta = std::min(beta, val.beta);
             } else {
                 lg.unlock();
                 eng->order_moves(legalMoves);
@@ -104,10 +107,15 @@ namespace sc {
                 alpha = std::max(value, alpha);
             }
 
+            constexpr auto alphaWindow = 450;
+            constexpr auto betaWindow = 450;
+
             Transposition ins;
             ins.depth = depth;
             ins.score = value;
             ins.bestMove = bestMove;
+            // ins.alpha = alpha - alphaWindow;
+            // ins.beta = beta + betaWindow;
 
             std::lock_guard<std::mutex> lg2(eng->ttMtx);
             eng->tt[pos->state.hash] = ins;
@@ -140,22 +148,23 @@ namespace sc {
                 int result = ACTUAL_MIN;
                 while (continueSearch && ++search.depth < maxDepth) {
                     auto undoInfo = sc::make_move(cpy, mov);
-                    result = -search.primitive_eval(ACTUAL_MIN, -runningAlpha.load());
+                    int intermedRes = -search.primitive_eval(ACTUAL_MIN, std::numeric_limits<int>::max()); // -runningAlpha.load());
                     sc::unmake_move(cpy, undoInfo, mov);
 
                     std::lock_guard<std::mutex> lg(mtx);
-                    std::cout << "info string depth " << search.depth << " move " << mov.long_alg_notation() << " cp score " << result << " hash " << search.pos->state.hash << '\n';
-
-                    if (result > runningAlpha) {
-                        runningAlpha = result - alphaWindow;
-                    }
+                    // std::cout << "info string depth " << search.depth << " move " << mov.long_alg_notation() << " cp score " << result << " hash " << search.pos->state.hash << '\n';
+                    if (continueSearch) result = intermedRes; // do not consider incomplete searches!
+                    // if (result > runningAlpha) {
+                    //     runningAlpha = result - alphaWindow;
+                    // }
                 }
 
                 std::lock_guard<std::mutex> lg(mtx);
-                std::cout << "info string Move " << mov.long_alg_notation() << " evaluates " << result <<'\n';
+                std::cout << "info string move " << mov.long_alg_notation() << " evaluates " << result << '\n';
                 if (result > evaluation) {
                     bestMove = mov;
                     evaluation = result;
+                    std::cout << "info string BESTMOVE ^^^^\n";
                 }
             };
 

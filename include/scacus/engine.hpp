@@ -14,6 +14,7 @@ namespace sc {
     struct Transposition {
         int depth;
         int score;
+        // int alpha, beta;
         Move bestMove;
     };
 

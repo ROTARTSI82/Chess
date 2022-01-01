@@ -123,6 +123,8 @@ namespace sc {
         }
 
         if (store) *store = (i + offset);
+
+        threefoldTable[state.hash]++;
     }
 
     std::string Position::get_fen() const {

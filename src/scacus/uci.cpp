@@ -76,7 +76,7 @@ namespace sc {
     void UCI::run() {
         worker = std::thread(workerFunc, this);
 
-        COUT << "Scuffed Scacus chess engine 2021.12.22\n";
+        COUT << "Scuffed Scacus chess engine 2022.01.01\n";
         while (running) {
             std::string line;
             std::getline(std::cin, line);
@@ -115,8 +115,8 @@ namespace sc {
                     COUT << "bestmove " << out << '\n';
                 } else {
                     eng.pos = &pos;
-                    eng.start_search(9999);
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    eng.start_search(999);
+                    std::this_thread::sleep_for(std::chrono::seconds(6));
                     eng.stop_search();
                     COUT << "bestmove " << eng.bestMove.long_alg_notation() << '\n';
                 }
