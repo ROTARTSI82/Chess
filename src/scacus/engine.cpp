@@ -64,9 +64,22 @@ namespace sc {
             if (legalMoves.empty())
                 return pos->isInCheck ? NEARLY_MIN - depth : 0;
 
-            eng->order_moves(legalMoves);
+            std::unique_lock<std::mutex> lg(eng->ttMtx);
+            if (eng->tt.count(pos->state.hash) > 0) {
+                Transposition &val = eng->tt.at(pos->state.hash);
+                eng->ttHits++;
+                if (val.depth >= depth) return val.score;
+                Move chosenOne = val.bestMove;
+                lg.unlock();
+
+                eng->order_moves(legalMoves, chosenOne);
+            } else {
+                lg.unlock();
+                eng->order_moves(legalMoves);
+            }
 
             int value = ACTUAL_MIN;
+            Move bestMove;
             for (const auto mov : legalMoves) {
                 auto undoInfo = sc::make_move(*pos, mov);
                 ColoredType captured = pos->state.capturedPiece;
@@ -77,7 +90,11 @@ namespace sc {
 
                 sc::unmake_move(*pos, undoInfo, mov);
 
-                value = std::max(value, result);
+                if (result > value) {
+                    bestMove = mov;
+                    value = result;
+                }
+
                 if (value >= beta) {
                     if (captured != NULL_COLORED_TYPE)
                         eng->history[pos->turn][mov.src][mov.dst] = depth * depth;
@@ -86,7 +103,14 @@ namespace sc {
                 
                 alpha = std::max(value, alpha);
             }
-            
+
+            Transposition ins;
+            ins.depth = depth;
+            ins.score = value;
+            ins.bestMove = bestMove;
+
+            std::lock_guard<std::mutex> lg2(eng->ttMtx);
+            eng->tt[pos->state.hash] = ins;
             return value;
         }
 
@@ -99,6 +123,7 @@ namespace sc {
 
         workers = new std::thread[legalMoves.size()];
         numWorkers = legalMoves.size();
+        ttHits = 0;
 
         runningAlpha.store(ACTUAL_MIN);
         evaluation = ACTUAL_MIN;
@@ -143,15 +168,19 @@ namespace sc {
         for (int i = 0; i < numWorkers; i++)
             workers[i].join();
         delete[] workers;
+
+        std::cout << "info string " << ttHits << " hits on transposition table of size " << tt.size() << '\n';
     }
 
-    void DefaultEngine::order_moves(MoveList &list) {
+    void DefaultEngine::order_moves(MoveList &list, Move best) {
 
         // TODO: Here, a capture base of 512 allows up to a depth of 22
         Bitboard occ = pos->by_side(WHITE_SIDE) | pos->by_side(BLACK_SIDE);
         for (auto &mov : list) {
             mov.ranking = 0;
-            if (mov.typeFlags == EN_PASSANT) {
+            if (mov == best) {
+                mov.ranking = std::numeric_limits<int16_t>::max();
+            } else if (mov.typeFlags == EN_PASSANT) {
                 mov.ranking = 512; // he he, en passant!
             } else if (to_bitboard(mov.dst) & occ) {
                 // lower the type_of, the more valuable

@@ -116,10 +116,9 @@ namespace sc {
                 } else {
                     eng.pos = &pos;
                     eng.start_search(9999);
-                    // std::this_thread::sleep_for(std::chrono::seconds(10));
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
                     eng.stop_search();
                     COUT << "bestmove " << eng.bestMove.long_alg_notation() << '\n';
-                    COUT << "info string hash = " << eng.pos->state.hash << '\n';
                 }
             } else if (line == "quit") {
                 running = false;

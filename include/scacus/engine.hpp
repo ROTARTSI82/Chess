@@ -25,6 +25,7 @@ namespace sc {
 
         std::mutex ttMtx;
         std::unordered_map<uint64_t, Transposition> tt; // transposition table
+        int ttHits = 0;
 
         std::mutex mtx;
         std::atomic_int runningAlpha;
@@ -41,6 +42,6 @@ namespace sc {
 
         void start_search(int maxDepth = 99);
         void stop_search();
-        void order_moves(MoveList &list);
+        void order_moves(MoveList &list, Move best = Move{0, 0});
     };
 }
