@@ -12,45 +12,6 @@
 
 using namespace sc;
 
-uint64_t perft_worker(sc::Position &pos, int depth) {
-    if (depth == 0)
-        return 1;
-
-    uint64_t tot = 0;
-    sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
-
-    for (const auto &m : legals) {
-        sc::StateInfo undo = sc::make_move(pos, m);
-        tot += perft_worker(pos, depth - 1);
-        sc::unmake_move(pos, undo, m);
-    }
-
-    return tot;
-}
-
-void perft(Position &pos, int depth) {
-    uint64_t total = 0;
-    auto start = std::chrono::high_resolution_clock::now();
-
-    sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
-
-    for (const auto &m : legals) {
-        sc::StateInfo undo = sc::make_move(pos, m);
-        uint64_t res = perft_worker(pos, depth - 1);
-        sc::unmake_move(pos, undo, m);
-
-        total += res;
-        std::cout << m.long_alg_notation() << ": " << res << '\n';
-    }
-    
-    auto duration = std::chrono::high_resolution_clock::now() - start;
-    auto nps = total / (std::chrono::duration_cast<std::chrono::microseconds>(duration).count() / 1000000.0);
-
-    // mimick stockfish perft output
-    std::cout << "Nodes searched (depth=" << depth << "): " << total << "\n";
-    std::cout << "Speed: " << nps / 1000.0 << " thousand leaf nodes per second\n";
-}
-
 
 int main(int argc, char **argv) {
     sc::UCI().run();
@@ -106,6 +67,7 @@ int main(int argc, char **argv) {
     sc::MoveList legalMoves;
 
     sc::Bitboard drawBb = 0;
+    sc::DefaultEngine eng;
 
     // annimation loop
     while (running) {
@@ -190,10 +152,10 @@ int main(int argc, char **argv) {
                     // turn ^= true;
                     break;
                 case SDLK_g: {
-                    auto engineMove = sc::primitive_search(pos, 3);
-                    undoCaps.push_back(sc::make_move(pos, engineMove.first));
-                    undoMoves.push_back(engineMove.first);
-                    std::cout << "Engine evaluation: " << engineMove.second << "\n";
+                    // auto engineMove = eng.primitive_search(pos, 3);
+                    // undoCaps.push_back(sc::make_move(pos, engineMove.first));
+                    // undoMoves.push_back(engineMove.first);
+                    // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;
                 }
                 case SDLK_i:

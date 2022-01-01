@@ -29,9 +29,48 @@ namespace sc {
             }
 
             Position cpy = uci->pos;
-            COUT << "bestmove " << primitive_search(cpy, 3).first.long_alg_notation() << '\n';
+            // COUT << "bestmove " << uci->eng.primitive_search(cpy, 3).first.long_alg_notation() << '\n';
             uci->go = false;
         }
+    }
+
+    uint64_t perft_worker(sc::Position &pos, int depth) {
+        if (depth == 0)
+            return 1;
+
+        uint64_t tot = 0;
+        sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
+
+        for (const auto &m : legals) {
+            sc::StateInfo undo = sc::make_move(pos, m);
+            tot += perft_worker(pos, depth - 1);
+            sc::unmake_move(pos, undo, m);
+        }
+
+        return tot;
+    }
+
+    void perft(Position &pos, int depth) {
+        uint64_t total = 0;
+        auto start = std::chrono::high_resolution_clock::now();
+
+        sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
+
+        for (const auto &m : legals) {
+            sc::StateInfo undo = sc::make_move(pos, m);
+            uint64_t res = perft_worker(pos, depth - 1);
+            sc::unmake_move(pos, undo, m);
+
+            total += res;
+            std::cout << m.long_alg_notation() << ": " << res << '\n';
+        }
+        
+        auto duration = std::chrono::high_resolution_clock::now() - start;
+        auto nps = total / (std::chrono::duration_cast<std::chrono::microseconds>(duration).count() / 1000000.0);
+
+        // mimick stockfish perft output
+        std::cout << "Nodes searched (depth=" << depth << "): " << total << "\n";
+        std::cout << "Speed: " << nps / 1000.0 << " thousand leaf nodes per second\n";
     }
 
     void UCI::run() {
@@ -63,16 +102,25 @@ namespace sc {
                 COUT << "readyok\n";
             } else if (line.rfind("position", 0) == 0) {
                 position(line.substr(8));
+            } else if (line.rfind("go perft", 0) == 0) { 
+                int num = std::stoi(line.substr(8));
+                perft(pos, num);
             } else if (line.rfind("go", 0) == 0) {
                 // go = true;
                 // mainToWorker.notify_all();
                 if (variant == Variant::ANTICHESS) {
-                    Move mov = antichess_search(pos, 6).first;
+                    Move mov = antichess_search(pos, 8).first;
                     std::string out = mov.long_alg_notation();
                     if (mov.typeFlags == CASTLE) out += 'k';
                     COUT << "bestmove " << out << '\n';
-                } else
-                    COUT << "bestmove " << primitive_search(pos, 3).first.long_alg_notation() << '\n';
+                } else {
+                    eng.pos = &pos;
+                    eng.start_search(9999);
+                    // std::this_thread::sleep_for(std::chrono::seconds(10));
+                    eng.stop_search();
+                    COUT << "bestmove " << eng.bestMove.long_alg_notation() << '\n';
+                    COUT << "info string hash = " << eng.pos->state.hash << '\n';
+                }
             } else if (line == "quit") {
                 running = false;
             } else if (line == "d") {

@@ -15,6 +15,10 @@ namespace sc {
     };
 
 
+
+    uint64_t perft_worker(sc::Position &pos, int depth);
+    void perft(Position &pos, int depth);
+
     class UCI {
     public:
         void run();
@@ -39,5 +43,7 @@ namespace sc {
         bool go = false;
 
         Variant variant = Variant::STANDARD;
+
+        DefaultEngine eng{};
     };
 }

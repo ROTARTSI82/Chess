@@ -148,6 +148,7 @@ namespace sc {
         Square dst : 6;
         PromoteType promote : 2;
         MoveType typeFlags : 2;
+        int16_t ranking = 0; // used for move ordering
 
         inline constexpr bool operator==(const Move rhs) const {
             return src == rhs.src && dst == rhs.dst && promote == rhs.promote && typeFlags == rhs.typeFlags;
@@ -163,16 +164,26 @@ namespace sc {
     template <MoveType TYPE>
     constexpr inline Move make_move(const Square from, const Square to) { return Move{from, to, PROMOTE_QUEEN, TYPE}; }
     constexpr inline Move make_normal(const Square from, const Square to) { return make_move<NORMAL>(from, to); }
-    constexpr inline Move make_promotion(const Square from, const Square to, const PromoteType promote) { return Move{from, to, promote, PROMOTION}; }
+    constexpr inline Move make_promotion(const Square from, const Square to, const PromoteType promote) { 
+        return Move{from, to, promote, PROMOTION, 4096 * 2}; // really high ranking: search promotions first!
+    }
 
     // info about a position that we would like to store separately for move undo
     struct StateInfo {
+        uint64_t hash = 0x927b1a7aed74a025ULL;
         int halfmoves = 0; // number of plies since a capture or pawn advance
 
         CastlingRights castlingRights;
         Square enPassantTarget = NULL_SQUARE;
         ColoredType capturedPiece = NULL_COLORED_TYPE;
     };
+
+    extern uint64_t zob_IsWhiteTurn;
+    extern uint64_t zob_EnPassantFile[8];
+    extern uint64_t zob_CastlingRights[4];
+
+    // TODO: This wastes a TON of memory but we don't really care, right?
+    extern uint64_t zob_Pieces[BOARD_SIZE][NUM_COLORED_PIECE_TYPES];
 
     class Position {
     public:
@@ -187,9 +198,11 @@ namespace sc {
             pieces[p] = make_ColoredType(type, side);
             byType[type] |= to_bitboard(p);
             byColor[side] |= to_bitboard(p);
+            state.hash ^= zob_Pieces[p][pieces[p]];
         }
 
         inline void clear(const Square p) {
+            state.hash ^= zob_Pieces[p][pieces[p]];
             byType[type_of(pieces[p])] &= ~to_bitboard(p); 
             byColor[side_of(pieces[p])] &= ~to_bitboard(p);
             pieces[p] = NULL_COLORED_TYPE;

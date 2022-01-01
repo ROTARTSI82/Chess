@@ -7,6 +7,11 @@
 
 namespace sc {
 
+    uint64_t zob_IsWhiteTurn = 0x5a35192d1f06d29aULL;
+    uint64_t zob_EnPassantFile[8];
+    uint64_t zob_CastlingRights[4];
+    uint64_t zob_Pieces[BOARD_SIZE][NUM_COLORED_PIECE_TYPES];
+
     void print_bb(const Bitboard b) {
         for (int rank = 8; rank > 0; rank--) {
             for (char file = 'a'; file < 'i'; file++) {
@@ -87,14 +92,17 @@ namespace sc {
         if (castling != '-') {
             while (fen.at(i) != ' ') {
                 char c = fen.at(i++);
-                uint8_t whichBit = tolower(c) == 'k' ? KINGSIDE_MASK : QUEENSIDE_MASK;
-                if (isupper(c)) whichBit <<= 2; // white gets left shifted
-                state.castlingRights |= whichBit;
+                int castleIndex = tolower(c) == 'k' ? 1 : 0;
+                if (isupper(c)) castleIndex += 2;
+
+                state.castlingRights |= (1 << castleIndex);
+                state.hash ^= zob_CastlingRights[castleIndex];
             }
         } else { i++; }
 
         if (fen.at(++i) != '-') { // skip over space and get next char
             state.enPassantTarget = make_square(fen.at(i), fen.at(i + 1) - '0');
+            state.hash ^= zob_EnPassantFile[file_ind_of(state.enPassantTarget)];
             i++;
         } else {
             state.enPassantTarget = NULL_SQUARE;

@@ -23,9 +23,13 @@ namespace sc {
         return nsq < 0|| nsq >= 64 || std::abs(file_ind_of(nsq) - file_ind_of(s)) > 2;
     }
 
+    static void init_zobrist();
+
     // this code doesn't have to be efficient as it's only run once at startup
     // so i've gone and done everything the lazy way!
     void init_movegen() {
+        init_zobrist();
+
         for (Square sq = 0; sq < BOARD_SIZE; sq++) {
             int rank = rank_ind_of(sq);
 
@@ -178,6 +182,18 @@ namespace sc {
         throw std::runtime_error{"Magic generation failed!"};
     }
 
+    static void init_zobrist() {
+        uint64_t seed = 0xe4e35f44eb8290d1ULL;
+        for (int i = 0; i < 8; i++)
+            zob_EnPassantFile[i] = rand_u64(seed);
+        for (int i = 0; i < 4; i++)
+            zob_CastlingRights[i] = rand_u64(seed);
+
+        for (int i = 0; i < BOARD_SIZE; i++)
+            for (int j = 0; j < NUM_COLORED_PIECE_TYPES; j++)
+                zob_Pieces[i][j] = rand_u64(seed);
+    };
+
     inline constexpr std::pair<Square, Square> castle_info(const Move mov) {
         Square targetRook = 0, rookNewDst = 0;
         if ((int) mov.dst - (int) mov.src > 0) { // kingside castling
@@ -198,6 +214,9 @@ namespace sc {
 
         if (pos.pieces[mov.dst] != NULL_COLORED_TYPE) pos.state.halfmoves = 0;
 
+        if (pos.state.enPassantTarget != NULL_SQUARE)
+            pos.state.hash ^= zob_EnPassantFile[file_ind_of(pos.state.enPassantTarget)];
+
         pos.state.enPassantTarget = NULL_SQUARE;
 
         const auto remove_castling_rights = [&](const Square rookSq, Side side) {
@@ -207,20 +226,44 @@ namespace sc {
             // this rook is not on a square of a castling rook, so it does not affect castling rights.
             if (file != 0 && file != 7) return;
 
-            CastlingRights mask = file == 0 ? QUEENSIDE_MASK : KINGSIDE_MASK;
+            int zobIndex = file == 0 ? 0 // queenside (1)
+                                     : 1; // kingside (2)
 
             if (side == WHITE_SIDE) {
                 if (rank != 0) return;
-                mask <<= 2;
+                zobIndex += 2;
             } else {
                 if (rank != 7) return;
             }
 
-            pos.state.castlingRights &= ~mask;
+            CastlingRights mask = 1 << zobIndex;
+            // if we have the right (i.e. we actually unset it), flip the hash
+            if (pos.state.castlingRights & mask) {
+                pos.state.hash ^= zob_CastlingRights[zobIndex];
+                pos.state.castlingRights &= ~mask;
+            }
         };
 
         const auto completely_forbid_castling = [&]() {
-            pos.state.castlingRights &= ~((KINGSIDE_MASK | QUEENSIDE_MASK) << (pos.turn == WHITE_SIDE ? 2 : 0));
+            CastlingRights kingside = KINGSIDE_MASK;
+            CastlingRights queenside = QUEENSIDE_MASK;
+            int zobBase;
+
+            if (pos.turn == WHITE_SIDE) {
+                kingside <<= 2;
+                queenside <<= 2;
+                zobBase = 2;
+            } else {
+                zobBase = 0;
+            }
+
+            if (pos.state.castlingRights & kingside) {
+                pos.state.hash ^= zob_CastlingRights[zobBase + 1];
+            } if (pos.state.castlingRights & queenside) {
+                pos.state.hash ^= zob_CastlingRights[zobBase];
+            }
+
+            pos.state.castlingRights &= ~(kingside | queenside);
         };
 
         switch (mov.typeFlags) {
@@ -235,8 +278,10 @@ namespace sc {
             switch (movedType) {
             case PAWN:
                 pos.state.halfmoves = 0; 
-                if (std::abs((int) mov.dst - (int) mov.src) == Dir::N * 2)
+                if (std::abs((int) mov.dst - (int) mov.src) == Dir::N * 2) {
                     pos.state.enPassantTarget = mov.dst + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+                    pos.state.hash ^= zob_EnPassantFile[file_ind_of(pos.state.enPassantTarget)];
+                }
                 break;
             case KING:
                 completely_forbid_castling();
@@ -284,6 +329,7 @@ namespace sc {
             remove_castling_rights(mov.dst, side_of(pos.state.capturedPiece));
 
         pos.turn = opposite_side(pos.turn);
+        pos.state.hash ^= zob_IsWhiteTurn; // no need to reset because it is stored in state!
         return ret;
     }
 
@@ -323,7 +369,7 @@ namespace sc {
             break;
         }
 
-        pos.state = info;
+        pos.state = info; // resets the hash too!
     }
 }
 

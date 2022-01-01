@@ -1,114 +1,169 @@
 #include "scacus/engine.hpp"
+#include <algorithm>
 
 namespace sc {
 
     // We can't actually use min because -min is not max! In fact, -min is negative! 
-    constexpr auto NEARLY_MIN = std::numeric_limits<int>::min() + 4;
+    constexpr auto NEARLY_MIN = std::numeric_limits<int>::min() + 128;
     constexpr auto ACTUAL_MIN = std::numeric_limits<int>::min() + 2;
 
-    static inline int eval(Position &pos, const MoveList &legalMoves) {
-        if (legalMoves.empty()) return pos.isInCheck ? NEARLY_MIN : 0;
+    class Searcher {
+    public:
+        Position *pos = nullptr;
+        int depth = 0; // current depth number (goes negative in quiescence_search())
+        int maxDepth = 0; // maximum depth reached by quiescence_search()
+        DefaultEngine *eng;
 
-        auto count = [&](const Type t) {
-            return popcnt(pos.by_side(pos.turn) & pos.by_type(t)) - popcnt(pos.by_side(opposite_side(pos.turn)) & pos.by_type(t));
-        };
+        inline int eval(const MoveList &legalMoves) {
+            if (legalMoves.empty()) return pos->isInCheck ? NEARLY_MIN - depth : 0;
 
-        auto opposingMoves = pos.turn == WHITE_SIDE ? standard_moves<BLACK_SIDE>(pos) : standard_moves<WHITE_SIDE>(pos);
+            auto count = [&](const Type t) {
+                return popcnt(pos->by_side(pos->turn) & pos->by_type(t)) - popcnt(pos->by_side(opposite_side(pos->turn)) & pos->by_type(t));
+            };
 
-        return (legalMoves.size() - opposingMoves.size()) + 100 * count(PAWN) + 300 * count(BISHOP) + 300 * count(KNIGHT) + 500 * count(ROOK) + 900 * count(QUEEN);
-    }
+            auto opposingMoves = pos->turn == WHITE_SIDE ? standard_moves<BLACK_SIDE>(*pos) : standard_moves<WHITE_SIDE>(*pos);
+            int ret = (legalMoves.size() - opposingMoves.size()) + 100 * count(PAWN) + 300 * count(BISHOP) + 300 * count(KNIGHT) + 500 * count(ROOK) + 900 * count(QUEEN);
+            return ret;
+        }
 
-    static inline int quiescence_search(Position &pos, int alpha, int beta) {
-        auto legalMoves = pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
-        int stand_pat = eval(pos, legalMoves);
-        if (stand_pat >= beta)
-            return stand_pat;
-        alpha = std::max(stand_pat, alpha);
+        inline int quiescence_search(int alpha, int beta) {
+            auto legalMoves = legal_moves_from(*pos);
+            int stand_pat = eval(legalMoves);
+            if (stand_pat >= beta || !eng->continueSearch)
+                return stand_pat;
+            alpha = std::max(stand_pat, alpha);
 
-        for (const auto mov : legalMoves) {
-            if ((pos.by_side(opposite_side(pos.turn)) & to_bitboard(mov.dst)) || mov.typeFlags == EN_PASSANT) {
-                auto undo = sc::make_move(pos, mov);
-                int score = -quiescence_search(pos, -beta, -alpha);
-                sc::unmake_move(pos, undo, mov);
+            for (const auto mov : legalMoves) {
+                if ((pos->by_side(opposite_side(pos->turn)) & to_bitboard(mov.dst)) || mov.typeFlags == EN_PASSANT) {
+                    auto undo = sc::make_move(*pos, mov);
 
-                if (score >= beta)
-                    return score;
-                alpha = std::max(alpha, score);
+                    depth--;
+                    int score = -quiescence_search(-beta, -alpha);
+                    depth++;
+
+                    sc::unmake_move(*pos, undo, mov);
+
+                    if (score >= beta)
+                        return score;
+                    alpha = std::max(alpha, score);
+                }
             }
+
+            // maxDepth = std::min(maxDepth, depth);
+
+            return alpha;
         }
 
-        return alpha;
-    }
+        inline int primitive_eval(int alpha, int beta) {
 
-    static inline int primitive_eval(Position &pos, int alpha, int beta, int depth) {
+            if (depth <= 0 || !eng->continueSearch) {
+                return quiescence_search(alpha, beta);
+            }
 
-        if (depth <= 0) {
-            return quiescence_search(pos, alpha, beta);
-        }
+            auto legalMoves = legal_moves_from(*pos);
+            if (legalMoves.empty())
+                return pos->isInCheck ? NEARLY_MIN - depth : 0;
 
-        auto legalMoves = pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
-        if (legalMoves.empty())
-            return pos.isInCheck ? NEARLY_MIN : 0;
+            eng->order_moves(legalMoves);
 
-        int value = ACTUAL_MIN;
-        for (const auto mov : legalMoves) {
-            auto undoInfo = sc::make_move(pos, mov);
-            auto result = -primitive_eval(pos, -beta, -alpha, depth - 1);
-            sc::unmake_move(pos, undoInfo, mov);
+            int value = ACTUAL_MIN;
+            for (const auto mov : legalMoves) {
+                auto undoInfo = sc::make_move(*pos, mov);
+                ColoredType captured = pos->state.capturedPiece;
 
-            value = std::max(value, result);
-            if (value >= beta)
-                return value;
+                depth--;
+                auto result = -primitive_eval(-beta, -alpha);
+                depth++;
+
+                sc::unmake_move(*pos, undoInfo, mov);
+
+                value = std::max(value, result);
+                if (value >= beta) {
+                    if (captured != NULL_COLORED_TYPE)
+                        eng->history[pos->turn][mov.src][mov.dst] = depth * depth;
+                    return value;
+                }
+                
+                alpha = std::max(value, alpha);
+            }
             
-            alpha = std::max(value, alpha);
+            return value;
         }
-        
-        return value;
-    }
 
-    #define MULTITHREAD 1
+    };
 
-    std::pair<Move, int> primitive_search(Position &pos, int depth) {
-        auto legalMoves = pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
+    void DefaultEngine::start_search(int maxDepth) {
+        continueSearch = true;
+        auto legalMoves = legal_moves_from(*pos);
+        order_moves(legalMoves);
 
-        #if MULTITHREAD
-            std::thread *workers = new std::thread[legalMoves.size()];
-        #endif
-        std::mutex mtx;
-        std::atomic_int value;
-        std::atomic_int alpha;
-        value.store(ACTUAL_MIN);
-        alpha.store(ACTUAL_MIN);
+        workers = new std::thread[legalMoves.size()];
+        numWorkers = legalMoves.size();
 
-        auto currentMov = make_normal(0, 0);
+        runningAlpha.store(ACTUAL_MIN);
+        evaluation = ACTUAL_MIN;
+
+        constexpr int alphaWindow = 450; // 0.5 queen
+
         for (int i = 0; i < legalMoves.size(); i++) {
-            auto do_work = [&, mov{legalMoves.at(i)}, cpy{pos}]() mutable {
-                auto undoInfo = sc::make_move(cpy, mov);
-                int result = -primitive_eval(cpy, ACTUAL_MIN, -alpha, depth - 1);
-                sc::unmake_move(cpy, undoInfo, mov);
+            auto do_work = [&, mov{legalMoves.at(i)}, cpy{*pos}]() mutable {
+                Searcher search;
+                search.depth = 0;
+                search.pos = &cpy;
+                search.eng = this;
+
+                int result = ACTUAL_MIN;
+                while (continueSearch && ++search.depth < maxDepth) {
+                    auto undoInfo = sc::make_move(cpy, mov);
+                    result = -search.primitive_eval(ACTUAL_MIN, -runningAlpha.load());
+                    sc::unmake_move(cpy, undoInfo, mov);
+
+                    std::lock_guard<std::mutex> lg(mtx);
+                    std::cout << "info string depth " << search.depth << " move " << mov.long_alg_notation() << " cp score " << result << " hash " << search.pos->state.hash << '\n';
+
+                    if (result > runningAlpha) {
+                        runningAlpha = result - alphaWindow;
+                    }
+                }
 
                 std::lock_guard<std::mutex> lg(mtx);
-                value = std::max(value.load(), result);
-                if (value > alpha) {
-                    currentMov = mov;
-                    alpha.store(value);
+                std::cout << "info string Move " << mov.long_alg_notation() << " evaluates " << result <<'\n';
+                if (result > evaluation) {
+                    bestMove = mov;
+                    evaluation = result;
                 }
             };
 
-        #if MULTITHREAD
             workers[i] = std::thread(do_work);
-        #else
-            do_work();
-        #endif
         }
+    }
 
-    #if MULTITHREAD
-        for (int i = 0; i < legalMoves.size(); i++)
+    void DefaultEngine::stop_search() {
+        continueSearch = false;
+        for (int i = 0; i < numWorkers; i++)
             workers[i].join();
         delete[] workers;
-    #endif
-        
-        return std::make_pair(currentMov, value.load());
     }
+
+    void DefaultEngine::order_moves(MoveList &list) {
+
+        // TODO: Here, a capture base of 512 allows up to a depth of 22
+        Bitboard occ = pos->by_side(WHITE_SIDE) | pos->by_side(BLACK_SIDE);
+        for (auto &mov : list) {
+            mov.ranking = 0;
+            if (mov.typeFlags == EN_PASSANT) {
+                mov.ranking = 512; // he he, en passant!
+            } else if (to_bitboard(mov.dst) & occ) {
+                // lower the type_of, the more valuable
+                mov.ranking = 512 + (int) type_of(pos->pieces[mov.src]) - (int) type_of(pos->pieces[mov.dst]);
+            } else if (mov.ranking == 0) {
+                mov.ranking = history[pos->turn][mov.src][mov.dst];
+            }
+        }
+
+        std::sort(list.begin(), list.end(), [&](Move a, Move b) -> bool {
+            return a.ranking > b.ranking;
+        });
+    };
 
 }
