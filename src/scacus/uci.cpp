@@ -18,6 +18,13 @@ namespace sc {
         auto duration = std::chrono::high_resolution_clock::now() - start;
         COUT << "info string Magic generation took ";
         COUT << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";
+
+        uci->eng.pos = &uci->pos;
+        uci->eng.start_search();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        uci->eng.stop_search();
+        // first search is buggy for some reason. hacky fix
+
         uci->readyok = true;
         uci->workerToMain.notify_all();
 
@@ -100,6 +107,8 @@ namespace sc {
                 std::unique_lock<std::mutex> lg(mtx);
                 workerToMain.wait(lg, [&]() -> bool { return readyok; });
                 COUT << "readyok\n";
+            } else if (line == "ucinewgame") {
+                ; // nothing
             } else if (line.rfind("position", 0) == 0) {
                 position(line.substr(8));
             } else if (line.rfind("go perft", 0) == 0) { 
@@ -114,7 +123,6 @@ namespace sc {
                     if (mov.typeFlags == CASTLE) out += 'k';
                     COUT << "bestmove " << out << '\n';
                 } else {
-                    eng.pos = &pos;
                     eng.start_search(999);
                     std::this_thread::sleep_for(std::chrono::seconds(6));
                     eng.stop_search();

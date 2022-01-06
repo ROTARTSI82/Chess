@@ -58,6 +58,7 @@ namespace sc {
     }
 
     void Position::set_state_from_fen(const std::string &fen, int *store) {
+        state.hash = 0x927b1a7aed74a025ULL;
         for (int i = 0; i < BOARD_SIZE; i++) pieces[i] = NULL_COLORED_TYPE;
         for (int i = 0; i < NUM_UNCOLORED_PIECE_TYPES; i++) byType[i] = 0;
         for (int i = 0; i < NUM_SIDES; i++) byColor[i] = 0;
