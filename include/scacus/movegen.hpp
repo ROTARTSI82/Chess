@@ -49,7 +49,56 @@ namespace sc {
     StateInfo make_move(Position &pos, const Move mov);
     void unmake_move(Position &pos, const StateInfo &info, const Move mov);
 
-    typedef std::vector<Move> MoveList;
+    class MoveList {
+    public:
+        Move *head = nullptr;
+        Move *tail = nullptr;
+
+        MoveList() = default;
+        explicit MoveList(int);
+
+        ~MoveList();
+
+        MoveList &operator=(const MoveList &&rhs) noexcept = delete;
+        MoveList &operator=(MoveList &&rhs) noexcept;
+
+        MoveList(const MoveList &rhs) noexcept = delete;
+        MoveList(MoveList &&rhs) noexcept;
+
+        inline void push_back(const Move &mov) {
+            *tail++ = mov;
+        }
+
+        inline void push_back(Move &&mov) {
+            *tail++ = mov;
+        }
+
+        [[nodiscard]] inline bool empty() const {
+            return tail == head;
+        }
+
+        [[nodiscard]] inline std::size_t size() const {
+            return tail - head;
+        }
+
+        [[nodiscard]] inline Move *begin() const {
+            return head;
+        }
+
+        [[nodiscard]] inline Move *end() const {
+            return tail;
+        }
+
+        [[nodiscard]] inline Move &at(std::size_t x) {
+            return head[x];
+        }
+
+        inline void clear() {
+            tail = head;
+        }
+    };
+
+//    typedef std::vector<Move> MoveList;
 
 
     template <Side SIDE>

@@ -8,8 +8,8 @@ namespace sc {
     // Assumption: You can't en passant and promote at the same time.
     template <Side SIDE>
     MoveList antichess_moves(const Position &pos) {
-        MoveList normalMoves;
-        MoveList captures;
+        MoveList normalMoves(0);
+        MoveList captures(0);
 
         const Bitboard occ = pos.by_side(WHITE_SIDE) | pos.by_side(BLACK_SIDE);
         const Bitboard capturePos = pos.by_side(opposite_side(SIDE));
@@ -85,12 +85,11 @@ namespace sc {
                 add_attacks();
                 break;
             default:
-                dbg_dump_position(pos);
-                throw std::runtime_error{"Bitboards desynced from piece type array"};
+                UNDEFINED();
             }
         }
 
-        return captures.empty() ? normalMoves : captures;
+        return std::move(captures.empty() ? normalMoves : captures);
     }
 
     template MoveList antichess_moves<WHITE_SIDE>(const Position &pos);

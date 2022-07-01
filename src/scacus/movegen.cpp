@@ -179,7 +179,7 @@ namespace sc {
             outerLoopContinue:;
         }
 
-        throw std::runtime_error{"Magic generation failed!"};
+        UNDEFINED();
     }
 
     static void init_zobrist() {
@@ -373,6 +373,26 @@ namespace sc {
         }
 
         pos.state = info; // resets the hash too!
+    }
+
+    MoveList::MoveList(int) : head(new Move[4096]), tail(head) {};
+
+    MoveList::~MoveList() {
+        delete[] head;
+    }
+
+    MoveList &MoveList::operator=(MoveList &&rhs) noexcept {
+        // skipping same-identity check
+        // if (&rhs == this) return *this;
+
+        head = rhs.head;
+        tail = rhs.tail;
+        rhs.head = nullptr;
+        return *this;
+    }
+
+    MoveList::MoveList(MoveList &&rhs) noexcept : head(rhs.head), tail(rhs.tail) {
+        rhs.head = nullptr;
     }
 }
 

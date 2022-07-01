@@ -49,8 +49,9 @@ namespace sc {
             return KNIGHT;
         case 'p':
             return PAWN;
+        default:
+            UNDEFINED();
         }
-        throw std::runtime_error{"Invalid char passed to coloredTypeFromChar"};
     }
 
     Position::Position(const std::string &fen) {

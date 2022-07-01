@@ -126,11 +126,11 @@ namespace sc {
 
     void DefaultEngine::start_search(int maxDepth) {
         continueSearch = true;
-        auto legalMoves = legal_moves_from(*pos);
+        MoveList legalMoves = legal_moves_from(*pos);
         order_moves(legalMoves);
 
         workers = new std::thread[legalMoves.size()];
-        numWorkers = legalMoves.size();
+        numWorkers = (int) legalMoves.size();
         ttHits = 0;
 
         runningAlpha.store(ACTUAL_MIN);
@@ -138,7 +138,7 @@ namespace sc {
 
         constexpr int alphaWindow = 450; // 0.5 queen
 
-        for (int i = 0; i < legalMoves.size(); i++) {
+        for (std::size_t i = 0; i < legalMoves.size(); i++) {
             auto do_work = [&, mov{legalMoves.at(i)}, cpy{*pos}]() mutable {
                 Searcher search;
                 search.depth = 0;

@@ -13,6 +13,8 @@
 
 #include <unordered_map>
 
+#define UNDEFINED() (*static_cast<int*>(nullptr))
+
 namespace sc {
     constexpr auto BOARD_SIZE = 64;
     constexpr auto STARTING_POS_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -27,7 +29,7 @@ namespace sc {
     constexpr Bitboard EVERYTHING_BB = 0xFFFFFFFFFFFFFFFF;
 
     constexpr inline int popcnt(const uint64_t v) {
-        return std::__popcount<uint64_t>(v);
+        return std::popcount<uint64_t>(v);
         // return std::bitset<64>(v).count();
     }
 
@@ -99,7 +101,6 @@ namespace sc {
     inline constexpr Side opposite_side(const Side s) { return static_cast<Side>((uint8_t) s ^ 1); }
 
     inline constexpr ColoredType make_ColoredType(const Type t, const Side s) {
-        if (t == 0) throw std::runtime_error{"make colored type with null"};        
         return static_cast<ColoredType>((int) t | (s == WHITE_SIDE ? 8 : 0));
     }
 
@@ -240,13 +241,13 @@ namespace sc {
 
     // returns the index of the least significant bit and sets it to 0
     constexpr inline int pop_lsb(uint64_t &x) {
-        auto ret = std::__countr_zero(x);
+        auto ret = std::countr_zero(x);
         x ^= (1ULL << ret); // flip that bit (sets to 0)
         return ret;
     }
 
     constexpr inline int get_lsb(const uint64_t x) {
-        return std::__countr_zero(x);
+        return std::countr_zero(x);
     }
 
     template <typename T>

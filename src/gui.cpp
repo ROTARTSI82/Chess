@@ -15,7 +15,7 @@ using namespace sc;
 
 int main(int argc, char **argv) {
     sc::UCI().run();
-    return 0;
+//    return 0;
 
     sc::init_movegen();
 

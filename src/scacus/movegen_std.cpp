@@ -18,19 +18,21 @@ namespace sc {
         case KNIGHT:
             return !(KNIGHT_MOVES[sq] & kingBB);
         default:
-            throw std::runtime_error{"We're being checked by the opposing king? what?"};
+            UNDEFINED();
         }
     }
 
     // checks if there is no check given by checker with the given occupancy bits
     static constexpr inline bool check_resolved(const Position &pos, const Bitboard occ, const Bitboard checker, const Bitboard kingBB) {
-        return check_resolved_sq(pos, occ, kingBB, std::__countr_zero(checker));
+        return check_resolved_sq(pos, occ, kingBB, std::countr_zero(checker));
     }
 
     // Assumption: You can't en passant and promote at the same time.
     template <Side SIDE>
     MoveList standard_moves(Position &pos) {
-        MoveList ret;
+        static_assert(SIDE == WHITE_SIDE || SIDE == BLACK_SIDE);
+
+        MoveList ret(0);
 
         const Bitboard occ = pos.by_side(WHITE_SIDE) | pos.by_side(BLACK_SIDE);
 
@@ -48,43 +50,34 @@ namespace sc {
             Type type = type_of(pos.pieces[sq]);
             Bitboard tmpAtk = 0;
 
-            auto add_other_side_threats = [&]() {
-                if (tmpAtk & kingBB) {
-                    checkerAttk = tmpAtk;
-                    checkers |= to_bitboard(sq);
-                }
-                underFire |= tmpAtk;
-            };
-
             switch (type) {
             case PAWN:
                 tmpAtk = PAWN_ATTACKS[opposite_side(SIDE)][sq];
-                add_other_side_threats();
                 break;
             case KING:
                 tmpAtk = KING_MOVES[sq];
-                add_other_side_threats();
                 break;
             case QUEEN:
                 tmpAtk = lookup<BISHOP_MAGICS>(sq, occ) | lookup<ROOK_MAGICS>(sq, occ);
-                add_other_side_threats();
                 break;
             case BISHOP:
                 tmpAtk = lookup<BISHOP_MAGICS>(sq, occ);
-                add_other_side_threats();
                 break;
             case ROOK:
                 tmpAtk = lookup<ROOK_MAGICS>(sq, occ);
-                add_other_side_threats();
                 break;
             case KNIGHT:
                 tmpAtk = KNIGHT_MOVES[sq];
-                add_other_side_threats();
                 break;
             default:
-                dbg_dump_position(pos);
-                throw std::runtime_error{"Bitboards desynced from piece type array"};
+                UNDEFINED();
             }
+
+            if (tmpAtk & kingBB) {
+                checkerAttk = tmpAtk;
+                checkers |= to_bitboard(sq);
+            }
+            underFire |= tmpAtk;
         }
 
 
@@ -112,35 +105,30 @@ namespace sc {
             maybePinned ^= bb; // remove this piece from the occupancy
 
             Bitboard pinnerIter = possiblePinners;
-            bool done = false;
-            while (pinnerIter && !done) {
+
+            while (pinnerIter) {
                 Square pinnerSq = pop_lsb(pinnerIter);
                 Bitboard pinnerAttk = 0;
-
-                auto update_pin_info = [&]() {
-                    if (pinnerAttk & kingBB) {
-                        pinned |= bb;
-                        done = true;
-                        pinnerOf[sq] = pinnerSq;
-                    }
-                };
 
                 switch (type_of(pos.pieces[pinnerSq])) {
                 case BISHOP:
                     pinnerAttk = lookup<BISHOP_MAGICS>(pinnerSq, maybePinned);
-                    update_pin_info();
                     break;
                 case ROOK:
                     pinnerAttk = lookup<ROOK_MAGICS>(pinnerSq, maybePinned) & kingBB;
-                    update_pin_info();
                     break;
                 case QUEEN:
                     pinnerAttk = (lookup<ROOK_MAGICS>(pinnerSq, maybePinned) | lookup<BISHOP_MAGICS>(pinnerSq, maybePinned));
-                    update_pin_info();
                     break;
                 default:
                     dbg_dump_position(pos);
                     throw std::runtime_error{"Non bishop/rook/queen pinner? (from pinner calculation loop)"};
+                }
+
+                if (pinnerAttk & kingBB) {
+                    pinned |= bb;
+                    pinnerOf[sq] = pinnerSq;
+                    break;
                 }
             }
 
@@ -241,16 +229,16 @@ namespace sc {
                         };
 
                         attk &= pos.by_side(opposite_side(SIDE));
-                        if_resolves_check(add_and_consider_promote);
                         
                         // add moves
-                        attk = PAWN_MOVES[SIDE][sq];
+                        Bitboard normMoves = PAWN_MOVES[SIDE][sq];
 
                         // hacky hack to prevent double advancing over a piece. TODO: Remove PAWN_MOVES table completely?
-                        if (attk & occ) attk &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S));
-                        attk &= landingSquares;
-                        attk &= ~occ; // pawn advances cannot capture pieces. we must do this since landingSquares includes an or of the checkers.
+                        if (normMoves & occ) normMoves &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S));
+                        normMoves &= landingSquares;
+                        normMoves &= ~occ; // pawn advances cannot capture pieces. we must do this since landingSquares includes an or of the checkers.
 
+                        attk |= normMoves;
                         if_resolves_check(add_and_consider_promote);
                         break;
                     }
@@ -388,14 +376,14 @@ namespace sc {
                 };
 
                 attk &= pos.by_side(opposite_side(SIDE));
-                add_moves(add_moves_check_promotions);
                 
                 // add moves
                 // TODO: Remove PAWN_MOVES table and calculate this properly
-                attk = PAWN_MOVES[SIDE][sq];
-                if (attk & occ) attk &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S)); // disallow double advance if single is blocked.
-                attk &= ~occ;
+                Bitboard normMoves = PAWN_MOVES[SIDE][sq];
+                if (normMoves & occ) normMoves &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S)); // disallow double advance if single is blocked.
+                normMoves &= ~occ;
 
+                attk |= normMoves;
                 add_moves(add_moves_check_promotions); // false -> do not allow_taking_pinner with a pawn advance
                 break;
             }
@@ -449,7 +437,7 @@ namespace sc {
                 illegal |= ((lookup<ROOK_MAGICS>(pinnerSq, testOcc) | lookup<BISHOP_MAGICS>(pinnerSq, testOcc)) & kingBB);
                 break;
             default:
-                throw std::runtime_error{"non bishop/rook/queen pinner for en passant?"};
+                UNDEFINED();
             }
         }
 
