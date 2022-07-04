@@ -13,7 +13,9 @@
 
 #include <unordered_map>
 
-#define UNDEFINED() (*static_cast<int*>(nullptr))
+#include <utility>
+
+#define UNDEFINED() __builtin_unreachable()
 
 namespace sc {
     constexpr auto BOARD_SIZE = 64;

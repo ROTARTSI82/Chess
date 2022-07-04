@@ -121,8 +121,7 @@ namespace sc {
                     pinnerAttk = (lookup<ROOK_MAGICS>(pinnerSq, maybePinned) | lookup<BISHOP_MAGICS>(pinnerSq, maybePinned));
                     break;
                 default:
-                    dbg_dump_position(pos);
-                    throw std::runtime_error{"Non bishop/rook/queen pinner? (from pinner calculation loop)"};
+                    UNDEFINED();
                 }
 
                 if (pinnerAttk & kingBB) {
@@ -243,7 +242,7 @@ namespace sc {
                         break;
                     }
                     default:
-                        throw std::runtime_error{"Illegal null piece on bitboard? (from movegen in check)"};
+                        UNDEFINED();
                     }
                 }
 
@@ -388,8 +387,7 @@ namespace sc {
                 break;
             }
             default:
-                dbg_dump_position(pos);
-                throw std::runtime_error{"Illegal null piece on bitboard? (from normal movegen)"};
+                UNDEFINED();
             }
         }
 
@@ -419,8 +417,10 @@ namespace sc {
         // the en passant might remove a pawn that was previously preventing
         // another piece from being pinned
         // see 8/2p5/3p4/KP5r/1R3pPk/8/4P3/8 b - g3 0 1
-        Bitboard pinnerIter = pos.by_side(opposite_side(SIDE)) & (pos.by_type(BISHOP) | pos.by_type(ROOK) | pos.by_type(QUEEN));
-        pinnerIter &= pseudo_attacks<ROOK_MAGICS>(kingSq) | pseudo_attacks<BISHOP_MAGICS>(kingSq); // is this computation even worth the time it saves in the loop?
+        Bitboard pinnerIter = pos.by_side(opposite_side(SIDE));
+        pinnerIter &= (pseudo_attacks<ROOK_MAGICS>(kingSq) & (pos.by_type(ROOK) | pos.by_type(QUEEN)))
+                | (pseudo_attacks<BISHOP_MAGICS>(kingSq) & (pos.by_type(BISHOP) | pos.by_type(QUEEN)));
+        // is this computation even worth the time it saves in the loop?
 
         while (!illegal && pinnerIter) {
             Square pinnerSq = pop_lsb(pinnerIter);

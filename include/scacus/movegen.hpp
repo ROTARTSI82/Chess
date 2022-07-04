@@ -46,24 +46,35 @@ namespace sc {
 
     void init_movegen();
 
-    StateInfo make_move(Position &pos, const Move mov);
-    void unmake_move(Position &pos, const StateInfo &info, const Move mov);
-
     class MoveList {
     public:
         Move *head = nullptr;
         Move *tail = nullptr;
 
-        MoveList() = default;
-        explicit MoveList(int);
+        inline MoveList() = default;
 
-        ~MoveList();
-
-        MoveList &operator=(const MoveList &&rhs) noexcept = delete;
-        MoveList &operator=(MoveList &&rhs) noexcept;
-
+        MoveList &operator=(const MoveList &&rhs) noexcept = delete;;
         MoveList(const MoveList &rhs) noexcept = delete;
-        MoveList(MoveList &&rhs) noexcept;
+
+        inline explicit MoveList(int) : head(new Move[4096]), tail(head) {};
+
+        inline ~MoveList() {
+            delete[] head;
+        }
+
+        inline MoveList &operator=(MoveList &&rhs) noexcept {
+            // skipping same-identity check
+            // if (&rhs == this) return *this;
+
+            head = rhs.head;
+            tail = rhs.tail;
+            rhs.head = nullptr;
+            return *this;
+        }
+
+        inline MoveList(MoveList &&rhs) noexcept : head(rhs.head), tail(rhs.tail) {
+            rhs.head = nullptr;
+        }
 
         inline void push_back(const Move &mov) {
             *tail++ = mov;
@@ -89,7 +100,7 @@ namespace sc {
             return tail;
         }
 
-        [[nodiscard]] inline Move &at(std::size_t x) {
+        [[nodiscard]] inline Move &at(std::size_t x) const {
             return head[x];
         }
 
@@ -98,13 +109,18 @@ namespace sc {
         }
     };
 
-//    typedef std::vector<Move> MoveList;
+//    template <Side SIDE>
+//    MoveList standard_moves(Position &pos);
 
+//    inline MoveList legal_moves_from(Position &pos) {
+//        return pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
+//    }
 
-    template <Side SIDE>
-    MoveList standard_moves(Position &pos);
-
-    inline MoveList legal_moves_from(Position &pos) {
-        return pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
-    }
+//    StateInfo make_move(Position &pos, const Move mov);
+//    void unmake_move(Position &pos, const StateInfo &info, const Move mov);
 }
+
+
+#include "scacus/impl/std_moves.hpp"
+#include "scacus/impl/make_unmake.hpp"
+
