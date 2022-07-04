@@ -181,6 +181,9 @@ namespace sc {
         CastlingRights castlingRights;
         Square enPassantTarget = NULL_SQUARE;
         ColoredType capturedPiece = NULL_COLORED_TYPE;
+
+//        Bitboard checkLines[NUM_SIDES];
+//        Bitboard pinLines[NUM_SIDES];
     };
 
     extern uint64_t zob_IsWhiteTurn;

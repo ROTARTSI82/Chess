@@ -15,7 +15,7 @@ using namespace sc;
 
 int main(int argc, char **argv) {
     sc::UCI().run();
-//    return 0;
+    return 0;
 
     sc::init_movegen();
 
@@ -154,11 +154,21 @@ int main(int argc, char **argv) {
                     break;
                 case SDLK_g: {
                     // auto engineMove = eng.primitive_search(pos, 3);
-                    eng.start_search(999);
+                    eng.start_search(64);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                     eng.stop_search();
                     undoCaps.push_back(sc::make_move(pos, eng.bestMove));
                     undoMoves.push_back(eng.bestMove);
+                    // std::cout << "Engine evaluation: " << engineMove.second << "\n";
+                    break;
+                }
+                case SDLK_w: {
+                    // auto engineMove = eng.primitive_search(pos, 3);
+                    eng.start_search(64);
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    eng.stop_search();
+                    undoCaps.push_back(sc::make_move(pos, eng.worstMove));
+                    undoMoves.push_back(eng.worstMove);
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;
                 }

@@ -88,6 +88,7 @@ namespace sc {
             std::string line;
             std::getline(std::cin, line);
             running = !std::cin.eof();
+//            std::cerr << line << '\n';
 
             if (line == "uci") {
                 // just pretend :) these are required for the lichess-bot python thing
@@ -123,10 +124,11 @@ namespace sc {
                     if (mov.typeFlags == CASTLE) out += 'k';
                     COUT << "bestmove " << out << '\n';
                 } else {
-                    eng.start_search(999);
-                    std::this_thread::sleep_for(std::chrono::seconds(6));
+                    eng.start_search(64);
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
                     eng.stop_search();
                     COUT << "bestmove " << eng.bestMove.long_alg_notation() << '\n';
+//                    std::cerr << "Eval: " << eng.evaluation << '\n';
                 }
             } else if (line == "quit") {
                 running = false;

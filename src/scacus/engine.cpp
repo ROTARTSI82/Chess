@@ -1,39 +1,53 @@
 #include "scacus/engine.hpp"
 #include <algorithm>
 
+#define ENABLE_TT
+
 namespace sc {
 
     // We can't actually use min because -min is not max! In fact, -min is negative! 
-    constexpr auto NEARLY_MIN = std::numeric_limits<int>::min() + 4096;
+    constexpr auto NEARLY_MIN = -1000 * 100;
     constexpr auto ACTUAL_MIN = std::numeric_limits<int>::min() + 2;
+
+    constexpr auto ACTUAL_MAX = std::numeric_limits<int>::max() - 2;
 
     class Searcher {
     public:
         Position *pos = nullptr;
+        int startDepth = 0;
         int depth = 0; // current depth number (goes negative in quiescence_search())
-        int maxDepth = 0; // maximum depth reached by quiescence_search()
+
+        int quiescenceDepthReached = 0;
+
         DefaultEngine *eng;
 
         inline int eval(const MoveList &legalMoves) {
             if (legalMoves.empty())
                 return pos->isInCheck ? NEARLY_MIN - depth : 0;
-            if (pos->state.halfmoves >= 50 || pos->threefoldTable[pos->state.hash] >= 3) return 0;
+            if (pos->state.halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */ ) return 0;
 
             auto count = [&](const Type t) {
                 return popcnt(pos->by_side(pos->turn) & pos->by_type(t)) - popcnt(pos->by_side(opposite_side(pos->turn)) & pos->by_type(t));
             };
 
             auto opposingMoves = pos->turn == WHITE_SIDE ? standard_moves<BLACK_SIDE>(*pos) : standard_moves<WHITE_SIDE>(*pos);
-            int ret = (legalMoves.size() - opposingMoves.size()) + 100 * count(PAWN) + 300 * count(BISHOP) + 300 * count(KNIGHT) + 500 * count(ROOK) + 900 * count(QUEEN);
-            return ret;
+            int ret = legalMoves.size() - 3*opposingMoves.size() + 108 * count(PAWN) + 305 * count(BISHOP)
+                    + 300 * count(KNIGHT) + 500 * count(ROOK) + 900 * count(QUEEN);
+
+            return ret + 2*popcnt(pos->by_side(pos->turn)) - popcnt(pos->by_side(opposite_side(pos->turn)));
         }
 
         inline int quiescence_search(int alpha, int beta) {
             auto legalMoves = legal_moves_from(*pos);
             int stand_pat = eval(legalMoves);
-            if (stand_pat >= beta || !eng->continueSearch || legalMoves.empty() || pos->state.halfmoves >= 50 || pos->threefoldTable[pos->state.hash] >= 3)
-                return stand_pat;
+            if (stand_pat >= beta) {
+                return stand_pat; // beta?
+            }
+
             alpha = std::max(stand_pat, alpha);
+
+//            if (!eng->continueSearch || pos->threefoldTable[pos->state.hash] >= 3)
+//                return alpha;
 
             for (const auto mov : legalMoves) {
                 if ((pos->by_side(opposite_side(pos->turn)) & to_bitboard(mov.dst)) || mov.typeFlags == EN_PASSANT) {
@@ -51,8 +65,7 @@ namespace sc {
                 }
             }
 
-            // maxDepth = std::min(maxDepth, depth);
-
+            quiescenceDepthReached = std::min(quiescenceDepthReached, depth);
             return alpha;
         }
 
@@ -65,19 +78,26 @@ namespace sc {
             auto legalMoves = legal_moves_from(*pos);
             if (legalMoves.empty())
                 return pos->isInCheck ? NEARLY_MIN - depth : 0;
-            if (pos->state.halfmoves >= 50 || pos->threefoldTable[pos->state.hash] >= 3) return 0;
+            if (pos->state.halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */) {
+                return 0;
+            }
 
+#ifdef ENABLE_TT
             std::unique_lock<std::mutex> lg(eng->ttMtx);
             if (eng->tt.count(pos->state.hash) > 0) {
                 Transposition &val = eng->tt.at(pos->state.hash);
                 eng->ttHits++;
-                lg.unlock();
-                // if (val.depth >= depth) return val.score;
+                if (val.depth > (startDepth-depth)) return val.score;
                 eng->order_moves(legalMoves, val.bestMove);
                 // alpha = std::max(alpha, val.alpha);
                 // beta = std::min(beta, val.beta);
-            } else {
                 lg.unlock();
+            } else
+#endif
+            {
+#ifdef ENABLE_TT
+                lg.unlock();
+#endif
                 eng->order_moves(legalMoves);
             }
 
@@ -100,7 +120,7 @@ namespace sc {
 
                 if (value >= beta) {
                     if (captured != NULL_COLORED_TYPE)
-                        eng->history[pos->turn][mov.src][mov.dst] = depth * depth;
+                        eng->history[pos->turn][mov.src][mov.dst] = (startDepth-depth) * (startDepth-depth);
                     return value;
                 }
                 
@@ -110,8 +130,9 @@ namespace sc {
             constexpr auto alphaWindow = 450;
             constexpr auto betaWindow = 450;
 
+#ifdef ENABLE_TT
             Transposition ins;
-            ins.depth = depth;
+            ins.depth = startDepth - depth;
             ins.score = value;
             ins.bestMove = bestMove;
             // ins.alpha = alpha - alphaWindow;
@@ -119,6 +140,7 @@ namespace sc {
 
             std::lock_guard<std::mutex> lg2(eng->ttMtx);
             eng->tt[pos->state.hash] = ins;
+#endif
             return value;
         }
 
@@ -135,18 +157,23 @@ namespace sc {
 
         runningAlpha.store(ACTUAL_MIN);
         evaluation = ACTUAL_MIN;
+        worstEval = ACTUAL_MAX;
+        tt.clear();
 
         constexpr int alphaWindow = 450; // 0.5 queen
 
         for (std::size_t i = 0; i < legalMoves.size(); i++) {
             auto do_work = [&, mov{legalMoves.at(i)}, cpy{*pos}]() mutable {
                 Searcher search;
-                search.depth = 0;
+                search.depth = 1;
                 search.pos = &cpy;
                 search.eng = this;
 
                 int result = ACTUAL_MIN;
-                while (continueSearch && ++search.depth < maxDepth) {
+                while (continueSearch && search.depth < maxDepth) {
+                    search.startDepth = search.depth;
+                    search.quiescenceDepthReached = maxDepth + 10;
+
                     auto undoInfo = sc::make_move(cpy, mov);
                     int intermedRes = -search.primitive_eval(ACTUAL_MIN, std::numeric_limits<int>::max()); // -runningAlpha.load());
                     sc::unmake_move(cpy, undoInfo, mov);
@@ -157,14 +184,27 @@ namespace sc {
                     // if (result > runningAlpha) {
                     //     runningAlpha = result - alphaWindow;
                     // }
+
+                    if (search.depth < 5) search.depth += 2;
+                    else search.depth++;
                 }
 
-                std::lock_guard<std::mutex> lg(mtx);
-                std::cout << "info string move " << mov.long_alg_notation() << " evaluates " << result << '\n';
-                if (result > evaluation) {
+                auto adjust = (std::sqrt(search.depth) * 1.5 + std::cbrt((double) (search.depth - search.quiescenceDepthReached)) / 2.0);
+                double doubleRes = result + adjust;
+//
+                std::lock_guard<std::mutex> lg2(mtx);
+                std::cout << "info string move " << mov.long_alg_notation() << " evaluates " << doubleRes
+                          << " adjust " << adjust << " depth " << (search.depth-1)
+                          << " quiescence depth " << (search.depth - search.quiescenceDepthReached - 1) << '\n';
+
+                if (doubleRes > evaluation) {
                     bestMove = mov;
-                    evaluation = result;
-                    std::cout << "info string BESTMOVE ^^^^\n";
+                    evaluation = doubleRes;
+                }
+
+                if (doubleRes < worstEval) {
+                    worstMove = mov;
+                    worstEval = doubleRes;
                 }
             };
 
@@ -179,6 +219,7 @@ namespace sc {
         delete[] workers;
 
         std::cout << "info string " << ttHits << " hits on transposition table of size " << tt.size() << '\n';
+        std::cout << "info string evaluation " << evaluation / 100 << '\n';
     }
 
     void DefaultEngine::order_moves(MoveList &list, Move best) {

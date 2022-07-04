@@ -34,8 +34,11 @@ namespace sc {
         Position *pos;
         int history[NUM_SIDES][BOARD_SIZE][BOARD_SIZE]; // [side_to_move][square_from][square_to]
         Move bestMove;
-        int evaluation;
+        double evaluation;
         bool continueSearch = true;
+
+        Move worstMove;
+        double worstEval;
 
         DefaultEngine() {
             memset(history, 0, sizeof(history));
