@@ -18,6 +18,7 @@ namespace sc {
         int depth = 0; // current depth number (goes negative in quiescence_search())
 
         int quiescenceDepthReached = 0;
+        int overrides = 0;
 
         DefaultEngine *eng;
 
@@ -87,7 +88,10 @@ namespace sc {
             if (eng->tt.count(pos->state.hash) > 0) {
                 Transposition &val = eng->tt.at(pos->state.hash);
                 eng->ttHits++;
-                if (val.depth > (startDepth-depth)) return val.score;
+                if (val.depth > depth) {
+                    overrides++;
+                    return val.score;
+                }
                 eng->order_moves(legalMoves, val.bestMove);
                 // alpha = std::max(alpha, val.alpha);
                 // beta = std::min(beta, val.beta);
@@ -132,7 +136,7 @@ namespace sc {
 
 #ifdef ENABLE_TT
             Transposition ins;
-            ins.depth = startDepth - depth;
+            ins.depth = depth;
             ins.score = value;
             ins.bestMove = bestMove;
             // ins.alpha = alpha - alphaWindow;
@@ -158,7 +162,7 @@ namespace sc {
         runningAlpha.store(ACTUAL_MIN);
         evaluation = ACTUAL_MIN;
         worstEval = ACTUAL_MAX;
-        tt.clear();
+//        tt.clear();
 
         constexpr int alphaWindow = 450; // 0.5 queen
 
@@ -193,9 +197,10 @@ namespace sc {
                 double doubleRes = result + adjust;
 //
                 std::lock_guard<std::mutex> lg2(mtx);
-                std::cout << "info string move " << mov.long_alg_notation() << " evaluates " << doubleRes
+                std::cout << "info string move " << mov.long_alg_notation() << " evaluates " << doubleRes / 100
                           << " adjust " << adjust << " depth " << (search.depth-1)
-                          << " quiescence depth " << (search.depth - search.quiescenceDepthReached - 1) << '\n';
+                          << " quiescence depth " << (search.depth - search.quiescenceDepthReached - 1)
+                          << " ttOverrides " << search.overrides << '\n';
 
                 if (doubleRes > evaluation) {
                     bestMove = mov;

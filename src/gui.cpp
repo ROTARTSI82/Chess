@@ -125,6 +125,7 @@ int main(int argc, char **argv) {
                 } else switch (event.key.keysym.sym) {
                 case SDLK_f:
                     std::cout << pos.get_fen() << std::endl;
+                    std::cout << "zob: " << pos.state.hash << std::endl;
                     break;
                 case SDLK_b:
                     drawBb = pos.by_type(BISHOP);
