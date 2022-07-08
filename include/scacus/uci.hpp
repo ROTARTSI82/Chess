@@ -22,7 +22,20 @@ namespace sc {
     class UCI {
     public:
         void run();
+        void process_cmd(const std::string &line);
 
+        UCI()
+        // : worker{workerFunc, this}
+        {
+            running = false;
+            workerFunc(this);
+        }
+//
+//        ~UCI() {
+//            running = false;
+//            mainToWorker.notify_all();
+//            worker.join();
+//        }
     
     private:
 
@@ -31,11 +44,11 @@ namespace sc {
         friend void workerFunc(UCI *);
         // we use a thread to actually think and stuff!
         // the main thread simply reads stdin & stdout
-        std::thread worker;
-
-        std::mutex mtx;
-        std::condition_variable mainToWorker;
-        std::condition_variable workerToMain;
+//        std::thread worker;
+//
+//        std::mutex mtx;
+//        std::condition_variable mainToWorker;
+//        std::condition_variable workerToMain;
         
         Position pos;
         bool running = true;

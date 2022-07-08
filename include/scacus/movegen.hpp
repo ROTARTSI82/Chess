@@ -10,6 +10,19 @@ namespace sc {
     extern Bitboard PAWN_MOVES[NUM_SIDES][BOARD_SIZE];
     extern Bitboard KING_MOVES[BOARD_SIZE];
 
+    inline constexpr Bitboard pawn_attacks(Side side, Square sq) {
+        return PAWN_ATTACKS[side][sq];
+    }
+
+    inline constexpr Bitboard king_moves(Square sq) {
+        return KING_MOVES[sq];
+    }
+
+    inline constexpr Bitboard knight_moves(Square sq) {
+        return KNIGHT_MOVES[sq];
+    }
+
+
     // https://www.chessprogramming.org/Magic_Bitboards
     struct Magic {
         Bitboard *table = nullptr;

@@ -6,7 +6,7 @@
 namespace sc {
 
     // We can't actually use min because -min is not max! In fact, -min is negative! 
-    constexpr auto NEARLY_MIN = -1000 * 100;
+    constexpr auto NEARLY_MIN = -10000 * 100;
     constexpr auto ACTUAL_MIN = std::numeric_limits<int>::min() + 2;
 
     constexpr auto ACTUAL_MAX = std::numeric_limits<int>::max() - 2;
@@ -24,7 +24,7 @@ namespace sc {
 
         inline int eval(const MoveList &legalMoves) {
             if (legalMoves.empty())
-                return pos->isInCheck ? NEARLY_MIN - depth : 0;
+                return pos->isInCheck ? NEARLY_MIN - depth*1000 : 0;
             if (pos->state.halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */ ) return 0;
 
             auto count = [&](const Type t) {
@@ -78,7 +78,7 @@ namespace sc {
 
             auto legalMoves = legal_moves_from(*pos);
             if (legalMoves.empty())
-                return pos->isInCheck ? NEARLY_MIN - depth : 0;
+                return pos->isInCheck ? NEARLY_MIN - depth*1000 : 0;
             if (pos->state.halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */) {
                 return 0;
             }
@@ -143,7 +143,8 @@ namespace sc {
             // ins.beta = beta + betaWindow;
 
             std::lock_guard<std::mutex> lg2(eng->ttMtx);
-            eng->tt[pos->state.hash] = ins;
+            if (eng->tt.count(pos->state.hash) == 0 || eng->tt[pos->state.hash].depth < depth)
+                eng->tt[pos->state.hash] = ins;
 #endif
             return value;
         }

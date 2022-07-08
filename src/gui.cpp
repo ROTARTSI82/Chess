@@ -15,6 +15,10 @@ using namespace sc;
 
 int main(int argc, char **argv) {
     sc::UCI().run();
+//    auto uci = sc::UCI();
+//    uci.process_cmd("isready");
+//    uci.process_cmd("go perft 6");
+//    uci.process_cmd("quit");
     return 0;
 
     sc::init_movegen();

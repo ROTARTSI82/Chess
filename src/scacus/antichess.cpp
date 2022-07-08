@@ -50,7 +50,7 @@ namespace sc {
 
             switch (type) {
             case PAWN:
-                tmpAtk = PAWN_ATTACKS[SIDE][sq];
+                tmpAtk = pawn_attacks(SIDE, sq);
                 if ((tmpAtk & to_bitboard(pos.state.enPassantTarget)) && pos.state.enPassantTarget != NULL_SQUARE) {
                     captures.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
                 }
@@ -65,7 +65,7 @@ namespace sc {
                 add_pawn_movs_to(normalMoves);
                 break;
             case KING:
-                tmpAtk = KING_MOVES[sq] & ~mySide;
+                tmpAtk = king_moves(sq) & ~mySide;
                 add_attacks();
                 break;
             case QUEEN:
@@ -81,7 +81,7 @@ namespace sc {
                 add_attacks();
                 break;
             case KNIGHT:
-                tmpAtk = KNIGHT_MOVES[sq] & ~mySide;
+                tmpAtk = knight_moves(sq) & ~mySide;
                 add_attacks();
                 break;
             default:

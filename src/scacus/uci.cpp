@@ -26,12 +26,12 @@ namespace sc {
         // first search is buggy for some reason. hacky fix
 
         uci->readyok = true;
-        uci->workerToMain.notify_all();
+//        uci->workerToMain.notify_all();
 
         while (uci->running) {
             {
-                std::unique_lock<std::mutex> lg(uci->mtx);
-                uci->mainToWorker.wait(lg, [&]() -> bool { return uci->go || !uci->running; });
+//                std::unique_lock<std::mutex> lg(uci->mtx);
+//                uci->mainToWorker.wait(lg, [&]() -> bool { return uci->go || !uci->running; });
                 if (!uci->running) return;
             }
 
@@ -81,66 +81,15 @@ namespace sc {
     }
 
     void UCI::run() {
-        worker = std::thread(workerFunc, this);
-
         COUT << "Scuffed Scacus chess engine 2022.01.01\n";
+        running = true;
         while (running) {
             std::string line;
             std::getline(std::cin, line);
             running = !std::cin.eof();
-//            std::cerr << line << '\n';
 
-            if (line == "uci") {
-                // just pretend :) these are required for the lichess-bot python thing
-                // to play nice with our engine.
-                COUT << "option name Hash type spin default 16 min 1 max 33554432\n"
-                "option name Threads type spin default 1 min 1 max 512\n"
-                "option name Move Overhead type spin default 10 min 0 max 5000\n"
-                "option name UCI_Variant type combo default chess var 3check var 5check var ai-wok var almost var amazon var antichess var armageddon var asean var ataxx var atomic var breakthrough var bughouse var cambodian var chaturanga var chess var chessgi var chigorin var clobber var codrus var coregal var crazyhouse var dobutsu var euroshogi var extinction var fairy var fischerandom var gardner var giveaway var gorogoro var grasshopper var hoppelpoppel var horde var judkins var karouk var kinglet var kingofthehill var knightmate var koedem var kyotoshogi var loop var losalamos var losers var makpong var makruk var micro var mini var minishogi var minixiangqi var newzealand var nightrider var nocastle var nocheckatomic var normal var placement var pocketknight var racingkings var seirawan var shatar var shatranj var shouse var sittuyin var suicide var threekings var torishogi\n"
-                "uciok\n";
-            } else if (line.rfind("setoption", 0) == 0) {
-                if (line.find("antichess") != std::string::npos) {
-                    variant = Variant::ANTICHESS;
-                } else {
-                    variant = Variant::STANDARD;
-                }
-            } else if (line.rfind("isready", 0) == 0) {
-                std::unique_lock<std::mutex> lg(mtx);
-                workerToMain.wait(lg, [&]() -> bool { return readyok; });
-                COUT << "readyok\n";
-            } else if (line == "ucinewgame") {
-                ; // nothing
-            } else if (line.rfind("position", 0) == 0) {
-                position(line.substr(8));
-            } else if (line.rfind("go perft", 0) == 0) { 
-                int num = std::stoi(line.substr(8));
-                perft(pos, num);
-            } else if (line.rfind("go", 0) == 0) {
-                // go = true;
-                // mainToWorker.notify_all();
-                if (variant == Variant::ANTICHESS) {
-                    Move mov = antichess_search(pos, 8).first;
-                    std::string out = mov.long_alg_notation();
-                    if (mov.typeFlags == CASTLE) out += 'k';
-                    COUT << "bestmove " << out << '\n';
-                } else {
-                    eng.start_search(64);
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
-                    eng.stop_search();
-                    COUT << "bestmove " << eng.bestMove.long_alg_notation() << '\n';
-//                    std::cerr << "Eval: " << eng.evaluation << '\n';
-                }
-            } else if (line == "quit") {
-                running = false;
-            } else if (line == "d") {
-                dbg_dump_position(pos);
-            } else {
-                COUT << "info string Unknown command: " << line << '\n';
-            }
+            process_cmd(line);
         }
-
-        mainToWorker.notify_all();
-        worker.join();
     }
 
     void UCI::position(const std::string &in) {
@@ -191,6 +140,57 @@ namespace sc {
                 else
                     sc::make_move(pos, mov);
             }
+        }
+    }
+
+    void UCI::process_cmd(const std::string &line) {
+        //            std::cerr << line << '\n'
+
+        if (line == "uci") {
+            // just pretend :) these are required for the lichess-bot python thing
+            // to play nice with our engine.
+            COUT << "option name Hash type spin default 16 min 1 max 33554432\n"
+                    "option name Threads type spin default 1 min 1 max 512\n"
+                    "option name Move Overhead type spin default 10 min 0 max 5000\n"
+                    "option name UCI_Variant type combo default chess var 3check var 5check var ai-wok var almost var amazon var antichess var armageddon var asean var ataxx var atomic var breakthrough var bughouse var cambodian var chaturanga var chess var chessgi var chigorin var clobber var codrus var coregal var crazyhouse var dobutsu var euroshogi var extinction var fairy var fischerandom var gardner var giveaway var gorogoro var grasshopper var hoppelpoppel var horde var judkins var karouk var kinglet var kingofthehill var knightmate var koedem var kyotoshogi var loop var losalamos var losers var makpong var makruk var micro var mini var minishogi var minixiangqi var newzealand var nightrider var nocastle var nocheckatomic var normal var placement var pocketknight var racingkings var seirawan var shatar var shatranj var shouse var sittuyin var suicide var threekings var torishogi\n"
+                    "uciok\n";
+        } else if (line.rfind("setoption", 0) == 0) {
+            if (line.find("antichess") != std::string::npos) {
+                variant = Variant::ANTICHESS;
+            } else {
+                variant = Variant::STANDARD;
+            }
+        } else if (line.rfind("isready", 0) == 0) {
+//            std::unique_lock<std::mutex> lg(mtx);
+//            workerToMain.wait(lg, [&]() -> bool { return readyok; });
+            COUT << "readyok\n";
+        } else if (line == "ucinewgame") {
+            ; // nothing
+        } else if (line.rfind("position", 0) == 0) {
+            position(line.substr(8));
+        } else if (line.rfind("go perft", 0) == 0) {
+            int num = std::stoi(line.substr(8));
+            perft(pos, num);
+        } else if (line.rfind("go", 0) == 0) {
+            // go = true;
+            // mainToWorker.notify_all();
+            if (variant == Variant::ANTICHESS) {
+                Move mov = antichess_search(pos, 8).first;
+                std::string out = mov.long_alg_notation();
+                if (mov.typeFlags == CASTLE) out += 'k';
+                COUT << "bestmove " << out << '\n';
+            } else {
+                eng.start_search(64);
+                std::this_thread::sleep_for(std::chrono::seconds(4));
+                eng.stop_search();
+                COUT << "bestmove " << eng.bestMove.long_alg_notation() << std::endl;
+            }
+        } else if (line == "quit") {
+            running = false;
+        } else if (line == "d") {
+            dbg_dump_position(pos);
+        } else {
+            COUT << "info string Unknown command: " << line << std::endl;
         }
     }
 }

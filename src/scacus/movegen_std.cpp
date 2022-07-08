@@ -14,9 +14,9 @@ namespace sc {
         case BISHOP:
             return !(lookup<BISHOP_MAGICS>(sq, occ) & kingBB);
         case PAWN:
-            return !(PAWN_ATTACKS[side_of(pos.pieces[sq])][sq] & kingBB);
+            return !(pawn_attacks(side_of(pos.pieces[sq]), sq) & kingBB);
         case KNIGHT:
-            return !(KNIGHT_MOVES[sq] & kingBB);
+            return !(knight_moves(sq) & kingBB);
         default:
             UNDEFINED();
         }
@@ -33,51 +33,45 @@ namespace sc {
         static_assert(SIDE == WHITE_SIDE || SIDE == BLACK_SIDE);
 
         MoveList ret(0);
+        auto check = CheckersInfo<SIDE>(pos);
 
-        const Bitboard occ = pos.by_side(WHITE_SIDE) | pos.by_side(BLACK_SIDE);
-
-        // now we generate a list of pinned pieces
-        Bitboard kingBB = pos.by_side(SIDE) & pos.by_type(KING);
-        Square king = std::countr_zero<uint64_t>(kingBB);
-        // is seperating these into two passes of rooks/queens + bishops/queens worth it?
-
-        Bitboard opposingIter = pos.by_side(opposite_side(SIDE));
-        Bitboard checkers = 0;
-        Bitboard checkerAttk = 0; // squares attacked by checker (set to the last checker found)
+//        const Bitboard occ = pos.by_side(WHITE_SIDE) | pos.by_side(BLACK_SIDE);
+//
+//        // now we generate a list of pinned pieces
+//        Bitboard kingBB = pos.by_side(SIDE) & pos.by_type(KING);
+//        Square king = std::countr_zero<uint64_t>(kingBB);
+//        // is seperating these into two passes of rooks/queens + bishops/queens worth it?
+//
+        Bitboard opposingIter = check.otherOcc;
+//        Bitboard checkers = 0;
+//        Bitboard checkerAttk = 0; // squares attacked by checker (set to the last checker found)
         Bitboard underFire = 0; // squares attacked by other side. pinned pieces and king are considered to attack normal squares.
         while (opposingIter) {
             Square sq = pop_lsb(opposingIter);
             Type type = type_of(pos.pieces[sq]);
-            Bitboard tmpAtk = 0;
 
             switch (type) {
             case PAWN:
-                tmpAtk = PAWN_ATTACKS[opposite_side(SIDE)][sq];
+                underFire |= pawn_attacks(opposite_side(SIDE), sq);
                 break;
             case KING:
-                tmpAtk = KING_MOVES[sq];
+                underFire |= king_moves(sq);
                 break;
             case QUEEN:
-                tmpAtk = lookup<BISHOP_MAGICS>(sq, occ) | lookup<ROOK_MAGICS>(sq, occ);
+                underFire |= lookup<BISHOP_MAGICS>(sq, check.occ) | lookup<ROOK_MAGICS>(sq, check.occ);
                 break;
             case BISHOP:
-                tmpAtk = lookup<BISHOP_MAGICS>(sq, occ);
+                underFire |= lookup<BISHOP_MAGICS>(sq, check.occ);
                 break;
             case ROOK:
-                tmpAtk = lookup<ROOK_MAGICS>(sq, occ);
+                underFire |= lookup<ROOK_MAGICS>(sq, check.occ);
                 break;
             case KNIGHT:
-                tmpAtk = KNIGHT_MOVES[sq];
+                underFire |= knight_moves(sq);
                 break;
             default:
                 UNDEFINED();
             }
-
-            if (tmpAtk & kingBB) {
-                checkerAttk = tmpAtk;
-                checkers |= to_bitboard(sq);
-            }
-            underFire |= tmpAtk;
         }
 
 
@@ -87,9 +81,9 @@ namespace sc {
         // mask of possible pieces that can be checking the king
         Bitboard possiblePinners = opposingIter & (pos.by_type(QUEEN) | pos.by_type(ROOK) | pos.by_type(BISHOP));
         // blocked by opposing pieces, ignoring own pieces.
-        Bitboard pinLines = lookup<ROOK_MAGICS>(king, opposingIter) | lookup<BISHOP_MAGICS>(king, opposingIter);
+        Bitboard pinLines = lookup<ROOK_MAGICS>(check.kingSq, opposingIter) | lookup<BISHOP_MAGICS>(check.kingSq, opposingIter);
         possiblePinners &= pinLines;
-        possiblePinners &= ~checkers; // cannot be already giving check!
+        possiblePinners &= ~check.all; // cannot be already giving check!
         Bitboard maybePinned = pos.by_side(SIDE) & pinLines;
         Bitboard maybePinnedIter = maybePinned;
         Bitboard pinned = 0;
@@ -115,7 +109,7 @@ namespace sc {
                     pinnerAttk = lookup<BISHOP_MAGICS>(pinnerSq, maybePinned);
                     break;
                 case ROOK:
-                    pinnerAttk = lookup<ROOK_MAGICS>(pinnerSq, maybePinned) & kingBB;
+                    pinnerAttk = lookup<ROOK_MAGICS>(pinnerSq, maybePinned) & check.kingBB;
                     break;
                 case QUEEN:
                     pinnerAttk = (lookup<ROOK_MAGICS>(pinnerSq, maybePinned) | lookup<BISHOP_MAGICS>(pinnerSq, maybePinned));
@@ -124,7 +118,7 @@ namespace sc {
                     UNDEFINED();
                 }
 
-                if (pinnerAttk & kingBB) {
+                if (pinnerAttk & check.kingBB) {
                     pinned |= bb;
                     pinnerOf[sq] = pinnerSq;
                     break;
@@ -137,7 +131,7 @@ namespace sc {
         Bitboard iter = pos.by_side(SIDE);
         Bitboard attk = 0;
 
-        if (checkers) { // i.e: in check
+        if (check.all) { // i.e: in check
             pos.isInCheck = true;
 
             Square sq;
@@ -148,17 +142,17 @@ namespace sc {
                     Square _dstsq = pop_lsb(attk);
 
                     /* in this case we capture the piece giving check! */
-                    if (to_bitboard(_dstsq) & checkers) {
+                    if (to_bitboard(_dstsq) & check.all) {
                         action(_dstsq);
                     } else {
-                        Bitboard testOcc = occ;
+                        Bitboard testOcc = check.occ;
                         Bitboard fromBb = to_bitboard(sq);
                         Bitboard toBb = to_bitboard(_dstsq);
 
                         testOcc ^= fromBb;
                         testOcc |= toBb;
 
-                        if (check_resolved(pos, testOcc, checkers, kingBB)) {
+                        if (check_resolved(pos, testOcc, check.all, check.kingBB)) {
                             action(_dstsq);
                         }
                     }
@@ -166,13 +160,16 @@ namespace sc {
             };
 
 
-            if (popcnt(checkers) == 1) { // only 1 checker. we can block by moving a piece.
+            if (popcnt(check.all) == 1) { // only 1 checker. we can block by moving a piece.
 
 
                 iter &= ~pinned; // pinned pieces cannot be moved while in check, i hope! TODO: find if this assumption is correct
 
                 // taking to checker, or squares the checker attacks (so that we might block the check)
-                const Bitboard landingSquares = checkers | (checkerAttk & ~occ);
+                const Bitboard checkerAttk = lookup<BISHOP_MAGICS>(check.kingSq, check.occ) |
+                                             lookup<ROOK_MAGICS>(check.kingSq, check.occ);
+
+                const Bitboard landingSquares = check.all | (checkerAttk & ~check.occ);
 
                 while (iter) {
                     sq = pop_lsb(iter);
@@ -180,19 +177,19 @@ namespace sc {
 
                     switch (type_of(pos.pieces[sq])) {
                     case KNIGHT:
-                        attk = KNIGHT_MOVES[sq] & landingSquares;
+                        attk = knight_moves(sq) & landingSquares;
                         if_resolves_check(plain_adder);
                         break;
                     case QUEEN:
-                        attk = (lookup<ROOK_MAGICS>(sq, occ) | lookup<BISHOP_MAGICS>(sq, occ)) & landingSquares;
+                        attk = (lookup<ROOK_MAGICS>(sq, check.occ) | lookup<BISHOP_MAGICS>(sq, check.occ)) & landingSquares;
                         if_resolves_check(plain_adder);
                         break;
                     case BISHOP:
-                        attk = lookup<BISHOP_MAGICS>(sq, occ) & landingSquares;
+                        attk = lookup<BISHOP_MAGICS>(sq, check.occ) & landingSquares;
                         if_resolves_check(plain_adder);
                         break;
                     case ROOK:
-                        attk = lookup<ROOK_MAGICS>(sq, occ) & landingSquares;
+                        attk = lookup<ROOK_MAGICS>(sq, check.occ) & landingSquares;
                         if_resolves_check(plain_adder);
                         break;
                     case KING:
@@ -201,19 +198,19 @@ namespace sc {
                         // in the case of double checks, and this code only handles single checks.
                         break;
                     case PAWN: {
-                        attk = PAWN_ATTACKS[SIDE][sq];
+                        attk = pawn_attacks(SIDE, sq);
 
                         Bitboard enPassant = to_bitboard(pos.state.enPassantTarget); // will be 0 if enPassantTarget is NULL_SQUARE
                         if ((enPassant & attk) && pos.state.enPassantTarget != NULL_SQUARE) {
                             if (en_passant_is_legal<SIDE>(pos, sq)) {
                                 // now check if this en passant resolves the check!
-                                Bitboard testOcc = occ;
+                                Bitboard testOcc = check.occ;
                                 testOcc ^= to_bitboard(sq); // this piece has moved
                                 testOcc |= enPassant; // move to the target square
                                 testOcc ^= to_bitboard(pos.state.enPassantTarget + (SIDE == WHITE_SIDE ? Dir::S : Dir::N)); // other has been captured
 
-                                if (get_lsb(checkers) + (SIDE == WHITE_SIDE ? Dir::N : Dir::S) == pos.state.enPassantTarget // we just captured the checker! we're out of check now
-                                    || check_resolved(pos, testOcc, checkers, kingBB))
+                                if (get_lsb(check.all) + (SIDE == WHITE_SIDE ? Dir::N : Dir::S) == pos.state.enPassantTarget // we just captured the checker! we're out of check now
+                                    || check_resolved(pos, testOcc, check.all, check.kingBB))
                                     ret.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
                             }
                         }
@@ -233,9 +230,9 @@ namespace sc {
                         Bitboard normMoves = PAWN_MOVES[SIDE][sq];
 
                         // hacky hack to prevent double advancing over a piece. TODO: Remove PAWN_MOVES table completely?
-                        if (normMoves & occ) normMoves &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S));
+                        if (normMoves & check.occ) normMoves &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S));
                         normMoves &= landingSquares;
-                        normMoves &= ~occ; // pawn advances cannot capture pieces. we must do this since landingSquares includes an or of the checkers.
+                        normMoves &= ~check.occ; // pawn advances cannot capture pieces. we must do this since landingSquares includes an or of the checkers.
 
                         attk |= normMoves;
                         if_resolves_check(add_and_consider_promote);
@@ -248,12 +245,12 @@ namespace sc {
 
             }
 
-            attk = KING_MOVES[king] & ~underFire & ~pos.by_side(SIDE);
+            attk = king_moves(check.kingSq) & ~underFire & ~pos.by_side(SIDE);
 
-            Bitboard fromBb = to_bitboard(king);
+            Bitboard fromBb = check.kingBB;
             while (attk) {
                 Square _dstsq = pop_lsb(attk);
-                Bitboard testOcc = occ;
+                Bitboard testOcc = check.occ;
                 Bitboard toBb = to_bitboard(_dstsq);
 
                 testOcc ^= fromBb;
@@ -264,13 +261,13 @@ namespace sc {
                 // thus, we use toBb instead of kingBB, and we entertain the possibility of
                 // more than one checker.
                 // see r4kQr/p1ppq1b1/bn4p1/4N3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQ - 0 3
-                Bitboard checkersIter = checkers & ~to_bitboard(_dstsq); // remove the checker we capture
+                Bitboard checkersIter = check.all & ~to_bitboard(_dstsq); // remove the checker we capture
                 while (checkersIter) {
                     if (!check_resolved_sq(pos, testOcc, toBb, pop_lsb(checkersIter)))
                         goto skipBcFail; // we are still in check! just return
                 }
 
-                ret.push_back(make_normal(king, _dstsq));
+                ret.push_back(make_normal(check.kingSq, _dstsq));
 
                 skipBcFail:;
             }
@@ -299,10 +296,10 @@ namespace sc {
                     attk &= pinLines; // step into a pin line (which includes pinners)
                     while (attk) {
                         Square candidateDst = pop_lsb(attk);
-                        Bitboard testOcc = occ;
+                        Bitboard testOcc = check.occ;
                         testOcc ^= srcBb; // unset the square we left
                         testOcc |= to_bitboard(candidateDst); // set the square we move to
-                        if (candidateDst == pinnerOf[sq] || check_resolved(pos, testOcc, pinnerBb, kingBB)) {
+                        if (candidateDst == pinnerOf[sq] || check_resolved(pos, testOcc, pinnerBb, check.kingBB)) {
                             action(candidateDst);
                         }
                     }
@@ -315,23 +312,23 @@ namespace sc {
 
             switch (type) {
             case KNIGHT:
-                attk = KNIGHT_MOVES[sq] & ~pos.by_side(SIDE);
+                attk = knight_moves(sq) & ~pos.by_side(SIDE);
                 add_moves(plain_adder);
                 break;
             case QUEEN:
-                attk = (lookup<ROOK_MAGICS>(sq, occ) | lookup<BISHOP_MAGICS>(sq, occ)) & ~pos.by_side(SIDE);
+                attk = (lookup<ROOK_MAGICS>(sq, check.occ) | lookup<BISHOP_MAGICS>(sq, check.occ)) & ~pos.by_side(SIDE);
                 add_moves(plain_adder);
                 break;
             case BISHOP:
-                attk = lookup<BISHOP_MAGICS>(sq, occ) & ~pos.by_side(SIDE);
+                attk = lookup<BISHOP_MAGICS>(sq, check.occ) & ~pos.by_side(SIDE);
                 add_moves(plain_adder);
                 break;
             case ROOK:
-                attk = lookup<ROOK_MAGICS>(sq, occ) & ~pos.by_side(SIDE);
+                attk = lookup<ROOK_MAGICS>(sq, check.occ) & ~pos.by_side(SIDE);
                 add_moves(plain_adder);
                 break;
             case KING: {
-                attk = KING_MOVES[sq] & ~pos.by_side(SIDE) & ~underFire;
+                attk = king_moves(sq) & ~pos.by_side(SIDE) & ~underFire;
                 add_moves(plain_adder);
 
                 static_assert(SIDE == WHITE_SIDE || SIDE == BLACK_SIDE);
@@ -345,8 +342,8 @@ namespace sc {
                 constexpr Bitboard occMaskKingside = CASTLING_OCCUPANCY_MASKS[1 + sideIndex];
 
                 // these squares can't be attacked
-                canKingside = canKingside && !(checkMaskKingside & underFire) && !(occMaskKingside & occ);
-                canQueenside = canQueenside && !(checkMaskQueenside & underFire) && !(occMaskQueenside & occ);
+                canKingside = canKingside && !(checkMaskKingside & underFire) && !(occMaskKingside & check.occ);
+                canQueenside = canQueenside && !(checkMaskQueenside & underFire) && !(occMaskQueenside & check.occ);
 
                 if (canKingside)
                     ret.push_back(make_move<CASTLE>(sq, sq + 2 * Dir::E));
@@ -356,7 +353,7 @@ namespace sc {
                 break;
             }
             case PAWN: {
-                attk = PAWN_ATTACKS[SIDE][sq];
+                attk = pawn_attacks(SIDE, sq);
 
                 Bitboard enPassant = to_bitboard(pos.state.enPassantTarget); // will be 0 if enPassantTarget is NULL_SQUARE
                 if ((enPassant & attk) && pos.state.enPassantTarget != NULL_SQUARE) {
@@ -379,8 +376,8 @@ namespace sc {
                 // add moves
                 // TODO: Remove PAWN_MOVES table and calculate this properly
                 Bitboard normMoves = PAWN_MOVES[SIDE][sq];
-                if (normMoves & occ) normMoves &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S)); // disallow double advance if single is blocked.
-                normMoves &= ~occ;
+                if (normMoves & check.occ) normMoves &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S)); // disallow double advance if single is blocked.
+                normMoves &= ~check.occ;
 
                 attk |= normMoves;
                 add_moves(add_moves_check_promotions); // false -> do not allow_taking_pinner with a pawn advance
