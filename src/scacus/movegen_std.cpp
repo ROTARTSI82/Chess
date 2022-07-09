@@ -1,4 +1,4 @@
-#include "scacus/movegen.hpp"
+/*#include "scacus/movegen.hpp"
 
 
 namespace sc {
@@ -141,7 +141,7 @@ namespace sc {
                 while (attk) {
                     Square _dstsq = pop_lsb(attk);
 
-                    /* in this case we capture the piece giving check! */
+                    // in this case we capture the piece giving check!
                     if (to_bitboard(_dstsq) & check.all) {
                         action(_dstsq);
                     } else {
@@ -444,3 +444,4 @@ namespace sc {
     template MoveList standard_moves<WHITE_SIDE>(Position &pos);
     template MoveList standard_moves<BLACK_SIDE>(Position &pos);
 }
+*/

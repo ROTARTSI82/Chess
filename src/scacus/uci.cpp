@@ -46,7 +46,9 @@ namespace sc {
             return 1;
 
         uint64_t tot = 0;
-        sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
+        sc::MoveList legals(0);
+        if (pos.turn == sc::WHITE_SIDE) sc::standard_moves<sc::WHITE_SIDE>(legals, pos);
+        else sc::standard_moves<sc::BLACK_SIDE>(legals, pos);
 
         for (const auto &m : legals) {
             sc::StateInfo undo = sc::make_move(pos, m);
@@ -61,7 +63,9 @@ namespace sc {
         uint64_t total = 0;
         auto start = std::chrono::high_resolution_clock::now();
 
-        sc::MoveList legals = pos.turn == sc::WHITE_SIDE ? sc::standard_moves<sc::WHITE_SIDE>(pos) : sc::standard_moves<sc::BLACK_SIDE>(pos);
+        sc::MoveList legals(0);
+        if (pos.turn == sc::WHITE_SIDE) sc::standard_moves<sc::WHITE_SIDE>(legals, pos);
+        else sc::standard_moves<sc::BLACK_SIDE>(legals, pos);
 
         for (const auto &m : legals) {
             sc::StateInfo undo = sc::make_move(pos, m);

@@ -9,6 +9,12 @@ namespace sc {
     Bitboard PAWN_MOVES[NUM_SIDES][BOARD_SIZE];
     Bitboard KING_MOVES[BOARD_SIZE];
 
+    // https://github.com/official-stockfish/Stockfish/blob/90cf8e7d2bde9e480aac4b119ce130e09dd2be39/src/bitboard.h#L220
+    // Bitboard containing line from first square to the other, excluding the first but including the
+    // second. If the two squares are not on a line, it's a bitboard of the second square.
+    // Used for generating king moves in check and calculating pins.
+    Bitboard PIN_LINE[BOARD_SIZE][BOARD_SIZE];
+
     Magic ROOK_MAGICS[BOARD_SIZE];
     Magic BISHOP_MAGICS[BOARD_SIZE];
 
@@ -35,11 +41,20 @@ namespace sc {
 
             KING_MOVES[sq] = 0;
 
-            for (int dir : {Dir::NW, Dir::N, Dir::NE, Dir::W, Dir::E, Dir::SW, Dir::S, Dir::SE})
-                if (!does_wrap(sq, dir)) KING_MOVES[sq] |= to_bitboard(sq + dir);
+            for (Square dst = 0; dst < BOARD_SIZE; dst++)
+                PIN_LINE[sq][dst] = to_bitboard(dst);
+
+            for (int dir : {Dir::NW, Dir::N, Dir::NE, Dir::W, Dir::E, Dir::SW, Dir::S, Dir::SE}) {
+                if (!does_wrap(sq, dir)) KING_MOVES[sq] |= to_bitboard(sq + dir); // generate 1-square king move
+
+                Square it = sq;
+                Bitboard bb = 0;
+                while (!does_wrap(it, dir))
+                    PIN_LINE[sq][it] = bb |= to_bitboard(it += dir);
+            }
 
 
-            // this will give dumb results for 1st and 8th ranks but pawns there are an illegal position anyways
+            // this will give dumb results for 1st and 8th ranks but pawns they're an illegal position anyways
             PAWN_MOVES[WHITE_SIDE][sq] = to_bitboard(sq + Dir::N);
             PAWN_MOVES[BLACK_SIDE][sq] = to_bitboard(sq + Dir::S);
 

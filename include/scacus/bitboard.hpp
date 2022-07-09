@@ -195,29 +195,29 @@ namespace sc {
 
     class Position {
     public:
-        explicit Position(const std::string &fen); 
+        explicit Position(const std::string &fen);
         Position() : Position(std::string{STARTING_POS_FEN}) {};
-        std::string get_fen() const;
+        [[nodiscard]] std::string get_fen() const;
 
         // store: Used to store the index into the string that we read to
-        void set_state_from_fen(const std::string &fen, int *store = nullptr);
+        constexpr void set_state_from_fen(const std::string &fen, int *store = nullptr);
 
-        inline void set(const Square p, const Type type, const Side side) {
+        constexpr inline void set(const Square p, const Type type, const Side side) {
             pieces[p] = make_ColoredType(type, side);
             byType[type] |= to_bitboard(p);
             byColor[side] |= to_bitboard(p);
             state.hash ^= zob_Pieces[p][pieces[p]];
         }
 
-        inline void clear(const Square p) {
+        constexpr inline void clear(const Square p) {
             state.hash ^= zob_Pieces[p][pieces[p]];
             byType[type_of(pieces[p])] &= ~to_bitboard(p); 
             byColor[side_of(pieces[p])] &= ~to_bitboard(p);
             pieces[p] = NULL_COLORED_TYPE;
         }
 
-        constexpr inline Bitboard by_side(const Side c) const { return byColor[c]; }
-        constexpr inline Bitboard by_type(const Type t) const { return byType[t]; }
+        [[nodiscard]] constexpr inline Bitboard by_side(const Side c) const { return byColor[c]; }
+        [[nodiscard]] constexpr inline Bitboard by_type(const Type t) const { return byType[t]; }
 
     public:
         int fullmoves = 1; // increment every time black moves
@@ -226,7 +226,7 @@ namespace sc {
         Bitboard byColor[NUM_SIDES]; // black = 0 white = 1
         Bitboard byType[NUM_UNCOLORED_PIECE_TYPES];
 
-        std::unordered_map<uint64_t, int8_t> threefoldTable;
+//        std::unordered_map<uint64_t, int8_t> threefoldTable;
 
         StateInfo state;
         Side turn = WHITE_SIDE;

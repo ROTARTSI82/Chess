@@ -141,6 +141,7 @@ namespace sc {
 
         pos.turn = opposite_side(pos.turn);
         pos.state.hash ^= zob_IsWhiteTurn; // no need to reset because it is stored in state!
+        pos.isInCheck = false;
 //        pos.threefoldTable[pos.state.hash]++;
         return ret;
     }
@@ -186,5 +187,6 @@ namespace sc {
         }
 
         pos.state = info; // resets the hash too!
+        pos.isInCheck = false;
     }
 }

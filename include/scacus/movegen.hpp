@@ -9,6 +9,7 @@ namespace sc {
     extern Bitboard PAWN_ATTACKS[NUM_SIDES][BOARD_SIZE];
     extern Bitboard PAWN_MOVES[NUM_SIDES][BOARD_SIZE];
     extern Bitboard KING_MOVES[BOARD_SIZE];
+    extern Bitboard PIN_LINE[BOARD_SIZE][BOARD_SIZE];
 
     inline constexpr Bitboard pawn_attacks(Side side, Square sq) {
         return PAWN_ATTACKS[side][sq];
@@ -20,6 +21,10 @@ namespace sc {
 
     inline constexpr Bitboard knight_moves(Square sq) {
         return KNIGHT_MOVES[sq];
+    }
+
+    inline constexpr Bitboard pin_line(Square king, Square pinner) {
+        return PIN_LINE[king][pinner];
     }
 
 
@@ -64,7 +69,7 @@ namespace sc {
         Move *head = nullptr;
         Move *tail = nullptr;
 
-        inline MoveList() = default;
+        inline MoveList() = delete;
 
         MoveList &operator=(const MoveList &&rhs) noexcept = delete;;
         MoveList(const MoveList &rhs) noexcept = delete;

@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
 
     std::vector<sc::Move> undoMoves;
     std::vector<sc::StateInfo> undoCaps;
-    sc::MoveList legalMoves;
+    sc::MoveList legalMoves(0);
 
     sc::Bitboard drawBb = 0;
     sc::DefaultEngine eng;
@@ -118,7 +118,9 @@ int main(int argc, char **argv) {
                     // undoMoves.push_back(engineMove.first);
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                 } else {
-                    legalMoves = pos.turn == WHITE_SIDE ? sc::standard_moves<WHITE_SIDE>(pos) : sc::standard_moves<BLACK_SIDE>(pos);
+                    legalMoves.clear();
+                    if (pos.turn == WHITE_SIDE) sc::standard_moves<WHITE_SIDE>(legalMoves, pos);
+                    else sc::standard_moves<BLACK_SIDE>(legalMoves, pos);
                 }
 
                 break;

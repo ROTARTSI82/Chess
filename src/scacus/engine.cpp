@@ -31,7 +31,10 @@ namespace sc {
                 return popcnt(pos->by_side(pos->turn) & pos->by_type(t)) - popcnt(pos->by_side(opposite_side(pos->turn)) & pos->by_type(t));
             };
 
-            auto opposingMoves = pos->turn == WHITE_SIDE ? standard_moves<BLACK_SIDE>(*pos) : standard_moves<WHITE_SIDE>(*pos);
+            MoveList opposingMoves(0);
+            if (pos->turn == WHITE_SIDE) standard_moves<BLACK_SIDE>(opposingMoves, *pos);
+            else standard_moves<WHITE_SIDE>(opposingMoves, *pos);
+
             int ret = legalMoves.size() - 3*opposingMoves.size() + 108 * count(PAWN) + 305 * count(BISHOP)
                     + 300 * count(KNIGHT) + 500 * count(ROOK) + 900 * count(QUEEN);
 
@@ -39,7 +42,9 @@ namespace sc {
         }
 
         inline int quiescence_search(int alpha, int beta) {
-            auto legalMoves = legal_moves_from(*pos);
+            MoveList legalMoves(0);
+            legal_moves_from(legalMoves, *pos);
+
             int stand_pat = eval(legalMoves);
             if (stand_pat >= beta) {
                 return stand_pat; // beta?
@@ -76,7 +81,8 @@ namespace sc {
                 return quiescence_search(alpha, beta);
             }
 
-            auto legalMoves = legal_moves_from(*pos);
+            MoveList legalMoves(0);
+            legal_moves_from(legalMoves, *pos);
             if (legalMoves.empty())
                 return pos->isInCheck ? NEARLY_MIN - depth*1000 : 0;
             if (pos->state.halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */) {
@@ -153,7 +159,8 @@ namespace sc {
 
     void DefaultEngine::start_search(int maxDepth) {
         continueSearch = true;
-        MoveList legalMoves = legal_moves_from(*pos);
+        MoveList legalMoves(0);
+        legal_moves_from(legalMoves, *pos);
         order_moves(legalMoves);
 
         workers = new std::thread[legalMoves.size()];
