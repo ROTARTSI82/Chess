@@ -6,7 +6,7 @@ import random
 puzzles = "/home/shared/chess/lichess_db_puzzle.csv"
 # puzzles = "/home/shared/chess/sample.csv"
 
-proc = subprocess.Popen(['stockfish'], stdout=subprocess.PIPE, stdin=subprocess.PIPE,
+proc = subprocess.Popen(['./build/Scacus'], stdout=subprocess.PIPE, stdin=subprocess.PIPE,
                         bufsize=1,
                         universal_newlines=True)
 
@@ -44,7 +44,7 @@ while True:
 
     if len(row) != 10:
         continue
-    print(row)
+    print(row, flush=True)
     (ident, fen, moves, rating, ratingDev, popularity, numPlays, themes, url, opening) = row
     moves = moves.split(' ')
     it = 1
@@ -59,11 +59,12 @@ while True:
 
         fenCmd = "position fen %s moves %s" % (fen, " ".join(moves[:it]))
         proc.stdin.write(fenCmd + "\ngo movetime 1000\n")
-        time.sleep(1)
+        time.sleep(3)
+        print("[*]\t", end='', flush=True)
         for line in proc.stdout:
             if "bestmove" in line:
                 if line[9:13] != moves[it]:
-                    print(f"FAIL {movesDeep} moves deep - Expected {moves[it]}, got {line[9:13]} in `{fenCmd}`")
+                    print(f"\nFAIL {movesDeep} moves deep - Expected {moves[it]}, got {line[9:13]} in `{fenCmd}`")
                     passed = False
                     it = 9999
                     movesDeep -= 1
@@ -72,7 +73,7 @@ while True:
         movesDeep += 1
 
     if passed:
-        print("PASS!")
+        print("\nPASS!")
 
     deltaElo = k*(movesDeep - expected) / scale
     # print (movesDeep, expected)

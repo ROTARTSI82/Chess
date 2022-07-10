@@ -175,7 +175,7 @@ namespace sc {
                 COUT << "bestmove " << out << '\n';
             } else {
                 eng.start_search(64);
-                std::this_thread::sleep_for(std::chrono::seconds(4));
+                std::this_thread::sleep_for(std::chrono::seconds(2));
                 eng.stop_search();
                 COUT << "bestmove " << eng.bestMove.long_alg_notation() << std::endl;
             }
