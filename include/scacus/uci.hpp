@@ -14,10 +14,7 @@ namespace sc {
         STANDARD, ANTICHESS,
     };
 
-
-
-    uint64_t perft_worker(sc::Position &pos, int depth);
-    void perft(Position &pos, int depth);
+    void run_perft(Position &pos, int depth);
 
     class UCI {
     public:

@@ -35,57 +35,36 @@ namespace sc {
                 if (!uci->running) return;
             }
 
-            Position cpy = uci->pos;
+//            Position cpy = uci->pos;
             // COUT << "bestmove " << uci->eng.primitive_search(cpy, 3).first.long_alg_notation() << '\n';
             uci->go = false;
         }
     }
 
-    uint64_t perft_worker(sc::Position &pos, int depth) {
-        if (depth == 0)
-            return 1;
+    template <bool ROOT>
+    static uint64_t perft2(Position &pos, int depth) {
+        uint64_t ret = 0;
 
-        uint64_t tot = 0;
-        sc::MoveList legals(0);
-        if (pos.turn == sc::WHITE_SIDE) sc::standard_moves<sc::WHITE_SIDE>(legals, pos);
-        else sc::standard_moves<sc::BLACK_SIDE>(legals, pos);
-
+        sc::MoveList legals = legal_moves_from(pos);
         for (const auto &m : legals) {
-            sc::StateInfo undo = sc::make_move(pos, m);
-            tot += perft_worker(pos, depth - 1);
-            sc::unmake_move(pos, undo, m);
+            uint64_t res = 1;
+
+            if (!ROOT || depth > 1) {
+                sc::StateInfo undo = sc::make_move(pos, m);
+                res = depth == 2 ? legal_moves_from(pos).size() : perft2 < false > (pos, depth - 1);
+                sc::unmake_move(pos, undo, m);
+            }
+
+            ret += res;
+            if constexpr (ROOT)
+                std::cout << m.long_alg_notation() << ": " << res << '\n';
         }
 
-        return tot;
-    }
-
-    void perft(Position &pos, int depth) {
-        uint64_t total = 0;
-        auto start = std::chrono::high_resolution_clock::now();
-
-        sc::MoveList legals(0);
-        if (pos.turn == sc::WHITE_SIDE) sc::standard_moves<sc::WHITE_SIDE>(legals, pos);
-        else sc::standard_moves<sc::BLACK_SIDE>(legals, pos);
-
-        for (const auto &m : legals) {
-            sc::StateInfo undo = sc::make_move(pos, m);
-            uint64_t res = perft_worker(pos, depth - 1);
-            sc::unmake_move(pos, undo, m);
-
-            total += res;
-            std::cout << m.long_alg_notation() << ": " << res << '\n';
-        }
-        
-        auto duration = std::chrono::high_resolution_clock::now() - start;
-        auto nps = total / (std::chrono::duration_cast<std::chrono::microseconds>(duration).count() / 1000000.0);
-
-        // mimick stockfish perft output
-        std::cout << "Nodes searched (depth=" << depth << "): " << total << "\n";
-        std::cout << "Speed: " << nps / 1000.0 << " thousand leaf nodes per second\n";
+        return ret;
     }
 
     void UCI::run() {
-        COUT << "Scuffed Scacus chess engine 2022.01.01\n";
+        COUT << "Scuffed Scacus chess engine " << __DATE__ << " " << __TIME__ << "\n";
         running = true;
         while (running) {
             std::string line;
@@ -147,6 +126,16 @@ namespace sc {
         }
     }
 
+    void run_perft(Position &pos, int depth) {
+        auto start = std::chrono::high_resolution_clock::now();
+        uint64_t res = perft2<true>(pos, depth);
+        auto diff = std::chrono::high_resolution_clock::now() - start;
+        auto nps = (double) res / ((double) std::chrono::duration_cast<std::chrono::microseconds>(diff).count() / 1000000.0);
+
+        std::cout << "Nodes searched (depth=" << depth << "): " << res;
+        std::cout << " (" << nps / 1000000.0 << " mnps)" << std::endl;
+    }
+
     void UCI::process_cmd(const std::string &line) {
         //            std::cerr << line << '\n'
 
@@ -174,7 +163,8 @@ namespace sc {
             position(line.substr(8));
         } else if (line.rfind("go perft", 0) == 0) {
             int num = std::stoi(line.substr(8));
-            perft(pos, num);
+
+            run_perft(pos, num);
         } else if (line.rfind("go", 0) == 0) {
             // go = true;
             // mainToWorker.notify_all();

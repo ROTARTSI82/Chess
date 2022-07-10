@@ -11,8 +11,24 @@ namespace sc {
     extern Bitboard KING_MOVES[BOARD_SIZE];
     extern Bitboard PIN_LINE[BOARD_SIZE][BOARD_SIZE];
 
-    inline constexpr Bitboard pawn_attacks(Side side, Square sq) {
+    inline constexpr Bitboard pawn_attacks_old(Side side, Square sq) {
         return PAWN_ATTACKS[side][sq];
+    }
+
+    template <Side SIDE>
+    inline constexpr Bitboard pawn_attacks(Square sq) {
+        return PAWN_ATTACKS[SIDE][sq];
+    }
+
+    template <Side SIDE>
+    inline constexpr Bitboard pawn_moves(Square sq, Bitboard occ) {
+        constexpr Bitboard rowMask = rank_bb(SIDE == BLACK_SIDE ? 6 : 3);
+        constexpr int direction = SIDE == BLACK_SIDE ? Dir::S : Dir::N;
+
+        const Bitboard mov = to_bitboard(sq + direction) & ~occ;
+        const Bitboard shift = mov & rowMask;
+
+        return mov | ((SIDE == BLACK_SIDE ? shift >> 8 : shift << 8) & ~occ);
     }
 
     inline constexpr Bitboard king_moves(Square sq) {

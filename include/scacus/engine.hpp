@@ -46,6 +46,6 @@ namespace sc {
 
         void start_search(int maxDepth = 99);
         void stop_search();
-        void order_moves(MoveList &list, Move best = Move{0, 0});
+        void order_moves(MoveList &list, Move best = Move{});
     };
 }

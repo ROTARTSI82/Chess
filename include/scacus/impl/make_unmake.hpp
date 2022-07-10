@@ -136,7 +136,7 @@ namespace sc {
                 UNDEFINED();
         }
 
-        if (type_of(pos.state.capturedPiece) == ROOK) //lm_update(mov.dst, side_of(pos.state.capturedPiece));
+        if (type_of(pos.state.capturedPiece) == ROOK)
             remove_castling_rights(&pos, mov.dst, side_of(pos.state.capturedPiece));
 
         pos.turn = opposite_side(pos.turn);

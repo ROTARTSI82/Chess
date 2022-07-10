@@ -50,7 +50,7 @@ namespace sc {
 
             switch (type) {
             case PAWN:
-                tmpAtk = pawn_attacks(SIDE, sq);
+                tmpAtk = pawn_attacks<SIDE>(sq);
                 if ((tmpAtk & to_bitboard(pos.state.enPassantTarget)) && pos.state.enPassantTarget != NULL_SQUARE) {
                     captures.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
                 }
@@ -139,7 +139,7 @@ namespace sc {
 
 
     // We can't actually use min because -min is not max! In fact, -min is negative! 
-    constexpr auto NEARLY_MIN = std::numeric_limits<int>::min() + 4;
+//    constexpr auto NEARLY_MIN = std::numeric_limits<int>::min() + 4;
     constexpr auto ACTUAL_MIN = std::numeric_limits<int>::min() + 2;
     constexpr auto ACTUAL_MAX = std::numeric_limits<int>::max() - 2;
 
@@ -223,7 +223,7 @@ namespace sc {
         alpha.store(ACTUAL_MIN);
 
         auto currentMov = make_normal(0, 0);
-        for (int i = 0; i < legalMoves.size(); i++) {
+        for (unsigned i = 0; i < legalMoves.size(); i++) {
             auto do_work = [&, mov{legalMoves.at(i)}, cpy{pos}]() mutable {
                 auto undoInfo = sc::antichess_make_move(cpy, mov);
                 int result = -antichess_eval(cpy, ACTUAL_MIN, -alpha, depth - 1);
@@ -245,7 +245,7 @@ namespace sc {
         }
 
     #if MULTITHREAD
-        for (int i = 0; i < legalMoves.size(); i++)
+        for (unsigned i = 0; i < legalMoves.size(); i++)
             workers[i].join();
         delete[] workers;
     #endif

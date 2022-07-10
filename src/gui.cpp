@@ -1,6 +1,8 @@
+#ifdef SDL_AVAIL
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_timer.h>
+#endif
 
 #include <cstdlib>
 #include <iostream>
@@ -13,14 +15,21 @@
 using namespace sc;
 
 
-int main(int argc, char **argv) {
-    sc::UCI().run();
-//    auto uci = sc::UCI();
-//    uci.process_cmd("isready");
-//    uci.process_cmd("go perft 6");
-//    uci.process_cmd("quit");
-    return 0;
+int main(int, char **) {
+    if (true) {
+        sc::UCI().run();
+        return 0;
+    }
 
+    if (false) {
+        auto uci = sc::UCI();
+        uci.process_cmd("isready");
+        uci.process_cmd("go perft 6");
+        uci.process_cmd("quit");
+        return 0;
+    }
+
+#ifdef SDL_AVAIL
     sc::init_movegen();
 
     // retutns zero on success else non-zero
@@ -127,7 +136,7 @@ int main(int argc, char **argv) {
             }
             case SDL_KEYDOWN: {
                 if (SDLK_0 <= event.key.keysym.sym && event.key.keysym.sym <= SDLK_9) {
-                    perft(pos, event.key.keysym.sym - SDLK_0);
+                    run_perft(pos, event.key.keysym.sym - SDLK_0);
                 } else switch (event.key.keysym.sym) {
                 case SDLK_f:
                     std::cout << pos.get_fen() << std::endl;
@@ -248,5 +257,7 @@ int main(int argc, char **argv) {
     SDL_DestroyRenderer(rend);
     SDL_DestroyWindow(win);
     SDL_Quit();
+#endif
+
 }
 #endif

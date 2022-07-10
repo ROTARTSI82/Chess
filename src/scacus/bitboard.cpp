@@ -58,7 +58,7 @@ namespace sc {
         set_state_from_fen(fen);
     }
 
-    constexpr void Position::set_state_from_fen(const std::string &fen, int *store) {
+    void Position::set_state_from_fen(const std::string &fen, int *store) {
         state.hash = 0x927b1a7aed74a025ULL;
         for (int i = 0; i < BOARD_SIZE; i++) pieces[i] = NULL_COLORED_TYPE;
         for (int i = 0; i < NUM_UNCOLORED_PIECE_TYPES; i++) byType[i] = 0;
@@ -115,14 +115,14 @@ namespace sc {
         std::size_t offset = 0;
 
         // some fens don't include the halfmove/fullmove numbers for some reason?
-        try {
+//        try {
             state.halfmoves = std::stoi(fen.substr(i), &offset);
             i += offset;
             fullmoves = std::stoi(fen.substr(i), &offset);
-        } catch (const std::exception &e) {
-            state.halfmoves = 0;
-            fullmoves = 1;
-        }
+//        } catch (const std::exception &e) {
+//            state.halfmoves = 0;
+//            fullmoves = 1;
+//        }
 
         if (store) *store = (i + offset);
     }

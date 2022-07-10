@@ -137,8 +137,8 @@ namespace sc {
                 alpha = std::max(value, alpha);
             }
 
-            constexpr auto alphaWindow = 450;
-            constexpr auto betaWindow = 450;
+//            constexpr auto alphaWindow = 450;
+//            constexpr auto betaWindow = 450;
 
 #ifdef ENABLE_TT
             Transposition ins;
@@ -172,7 +172,7 @@ namespace sc {
         worstEval = ACTUAL_MAX;
 //        tt.clear();
 
-        constexpr int alphaWindow = 450; // 0.5 queen
+//        constexpr int alphaWindow = 450; // 0.5 queen
 
         for (std::size_t i = 0; i < legalMoves.size(); i++) {
             auto do_work = [&, mov{legalMoves.at(i)}, cpy{*pos}]() mutable {

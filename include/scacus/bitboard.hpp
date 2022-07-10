@@ -159,9 +159,9 @@ namespace sc {
             return src == rhs.src && dst == rhs.dst && promote == rhs.promote && typeFlags == rhs.typeFlags;
         }
 
-        inline std::string long_alg_notation() const {
+        [[nodiscard]] inline std::string long_alg_notation() const {
             std::string ret = sq_to_str(src) + sq_to_str(dst);
-            if (typeFlags == PROMOTION) ret += (type_to_char(static_cast<Type>((int) promote + 2)) + ('a' - 'A'));
+            if (typeFlags == PROMOTION) ret += (type_to_char(static_cast<Type>(promote + 2)) + ('a' - 'A'));
             return ret;
         }
     };
@@ -200,7 +200,7 @@ namespace sc {
         [[nodiscard]] std::string get_fen() const;
 
         // store: Used to store the index into the string that we read to
-        constexpr void set_state_from_fen(const std::string &fen, int *store = nullptr);
+        void set_state_from_fen(const std::string &fen, int *store = nullptr);
 
         constexpr inline void set(const Square p, const Type type, const Side side) {
             pieces[p] = make_ColoredType(type, side);
