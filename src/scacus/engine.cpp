@@ -175,7 +175,7 @@ namespace sc {
 //        constexpr int alphaWindow = 450; // 0.5 queen
 
         for (std::size_t i = 0; i < legalMoves.size(); i++) {
-            auto do_work = [&, mov{legalMoves.at(i)}, cpy{*pos}]() mutable {
+            auto do_work = [=, mov{legalMoves.at(i)}, cpy{*pos}]() mutable {
                 Searcher search;
                 search.depth = 1;
                 search.pos = &cpy;

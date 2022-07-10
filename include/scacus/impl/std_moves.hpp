@@ -78,8 +78,11 @@ namespace sc {
             }
         }
 
+        pos.isInCheck = false;
         Bitboard landing = ~self;  // squares we are allowed to land on
         if (checkers) {
+            pos.isInCheck = true;
+
             // single check: We are being checked by a single piece. Either block or move a piece
             Square sq = get_lsb(checkers);
 
