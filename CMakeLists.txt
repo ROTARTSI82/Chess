@@ -43,7 +43,7 @@ if (USE_ASAN)
     add_link_options(-fsanitize=address)
 endif()
 
-set(USE_SDL true)
+set(USE_SDL false)
 if (USE_SDL)
     find_package(SDL2 REQUIRED)
     find_package(SDL2_image REQUIRED)

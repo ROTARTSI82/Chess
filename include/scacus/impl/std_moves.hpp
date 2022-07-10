@@ -22,7 +22,6 @@ namespace sc {
         const Bitboard occ = opponent | self;
 
         const Bitboard kingBb = self & pos.by_type(KING);
-        if (!kingBb) return; // no king??? this is prolly a bug and can be removed
         const Square kingSq = get_lsb(kingBb);
 
         Bitboard attk = 0; // bitboard being attacked by the opposite side
@@ -175,7 +174,7 @@ namespace sc {
             Bitboard it = self & pos.by_type(PAWN) & pawn_attacks<opposite_side(SIDE)>(pos.state.enPassantTarget);
             Bitboard ep = to_bitboard(pos.state.enPassantTarget);
 
-            while (it) {
+            for (int numEps = 0; numEps < 2; numEps++) {
                 const Square sq = pop_lsb(it);
                 const Bitboard bb = to_bitboard(sq);
 
@@ -194,7 +193,7 @@ namespace sc {
                 const bool targetPinCheckPassed = !(seesKing & ~checkers & opponent &
                                                     (pos.by_type(QUEEN) | pos.by_type(ROOK)));
 
-                if (pinCheckPassed && checkCheckPassed && targetPinCheckPassed)
+                if (it && pinCheckPassed && checkCheckPassed && targetPinCheckPassed)
                     ls.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
             }
         }
