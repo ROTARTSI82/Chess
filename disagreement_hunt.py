@@ -69,8 +69,11 @@ for pos in positions:
 
             if len(stock) != len(mine) or myMovs != stockMovs:
                 print("Incorrect generation for %s" % cmd)
-                print("\tstock:\t", sorted(stock))
-                print("\tmine:\t", sorted(mine))
+                print("\tstock:\t", sorted(stockMovs))
+                print("\tmine:\t", sorted(myMovs))
+
+                print("\n\tMoves MISSING:\t", stockMovs.difference(myMovs))
+                print("\tMoves EXTRA:\t", myMovs.difference(stockMovs))
                 to_fix.append(cmd)
                 break
 

@@ -174,7 +174,7 @@ namespace sc {
             Bitboard it = self & pos.by_type(PAWN) & pawn_attacks<opposite_side(SIDE)>(pos.state.enPassantTarget);
             Bitboard ep = to_bitboard(pos.state.enPassantTarget);
 
-            for (int numEps = 0; numEps < 2; numEps++) {
+            while (it) {
                 const Square sq = pop_lsb(it);
                 const Bitboard bb = to_bitboard(sq);
 
@@ -182,18 +182,18 @@ namespace sc {
                                                      + (SIDE == BLACK_SIDE ? Dir::N : Dir::S));
 
                 // if we are pinned, we need to land on the pin line
-                const bool pinCheckPassed = !(bb & pinned) || (ep & pinLines[sq]);
+                #define PIN_PASSED !(bb & pinned) || (ep & pinLines[sq])
 
                 // if we are in check, we need to capture the checker or land between the king & checker (landings)
-                const bool checkCheckPassed = !checkers || (ep & landing) || (capPawn & checkers);
+                #define CHECK_PASSED !checkers || (ep & landing) || (capPawn & checkers)
 
                 // Taking en passant can be disallowed if it reveals a check to a rook or queen on the side
                 // see 8/8/8/3KPp1r/8/8/8/8 w - f6 0 1
-                const Bitboard seesKing = lookup<ROOK_MAGICS>(kingSq, occ ^ bb ^ capPawn ^ ep);
-                const bool targetPinCheckPassed = !(seesKing & ~checkers & opponent &
-                                                    (pos.by_type(QUEEN) | pos.by_type(ROOK)));
+                #define SEES_KING lookup<ROOK_MAGICS>(kingSq, occ ^ bb ^ capPawn ^ ep)
+                #define TARGET_PASSED !(SEES_KING & ~checkers & opponent & \
+                                       (pos.by_type(QUEEN) | pos.by_type(ROOK)))
 
-                if (it && pinCheckPassed && checkCheckPassed && targetPinCheckPassed)
+                if ((PIN_PASSED) && (CHECK_PASSED) && (TARGET_PASSED))
                     ls.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
             }
         }
