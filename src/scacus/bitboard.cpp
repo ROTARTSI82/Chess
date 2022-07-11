@@ -54,6 +54,40 @@ namespace sc {
         }
     }
 
+    [[nodiscard]] std::string Move::standard_alg_notation(Position &pos) const {
+        // doesn't include en passant
+        const bool isCapture = to_bitboard(dst) & (pos.by_side(WHITE_SIDE) | pos.by_side(BLACK_SIDE));
+        const bool isPawn = to_bitboard(src) & pos.by_type(PAWN);
+
+        std::string ret;
+
+        // en passants and pawn captures are always the same format: file of departure + 'x' + destination
+        if (typeFlags == EN_PASSANT || (isCapture && isPawn))
+            ret += static_cast<char>('a' + file_ind_of(src)) + std::string{"x"} + sq_to_str(dst);
+        else if (isPawn)
+            ret += sq_to_str(dst); // there should be no need to disambiguate pawn advances
+
+        if (typeFlags == PROMOTION)
+            return ret + std::string{"="} + type_to_char(static_cast<Type>(promote + 2));
+        else if (isPawn)
+            return ret;
+
+        if (typeFlags == CASTLE) {
+            if (file_ind_of(dst) > file_ind_of(src))
+                return "O-O"; // kingside
+            else
+                return "O-O-O"; // queenside
+        }
+
+        ret += type_to_char(type_of(pos.pieces[src]));
+        ret += sq_to_str(src); // always fully disambiguates. I'm too lazy to make it better.
+
+        if (isCapture) ret += 'x';
+        ret += sq_to_str(dst);
+
+        return ret;
+    }
+
     Position::Position(const std::string &fen) {
         set_state_from_fen(fen);
     }

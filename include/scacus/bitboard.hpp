@@ -147,32 +147,6 @@ namespace sc {
         NORMAL = 0, PROMOTION, EN_PASSANT, CASTLE
     };
 
-    // see https://github.com/official-stockfish/Stockfish/blob/0a318cdddf8b6bdd05c2e0ee9b3b61a031d398ed/src/types.h#L112
-    struct Move {
-        Square src : 6;
-        Square dst : 6;
-        PromoteType promote : 2;
-        MoveType typeFlags : 2;
-        int16_t ranking = 0; // used for move ordering
-
-        inline constexpr bool operator==(const Move rhs) const {
-            return src == rhs.src && dst == rhs.dst && promote == rhs.promote && typeFlags == rhs.typeFlags;
-        }
-
-        [[nodiscard]] inline std::string long_alg_notation() const {
-            std::string ret = sq_to_str(src) + sq_to_str(dst);
-            if (typeFlags == PROMOTION) ret += (type_to_char(static_cast<Type>(promote + 2)) + ('a' - 'A'));
-            return ret;
-        }
-    };
-
-    template <MoveType TYPE>
-    constexpr inline Move make_move(const Square from, const Square to) { return Move{from, to, PROMOTE_QUEEN, TYPE}; }
-    constexpr inline Move make_normal(const Square from, const Square to) { return make_move<NORMAL>(from, to); }
-    constexpr inline Move make_promotion(const Square from, const Square to, const PromoteType promote) { 
-        return Move{from, to, promote, PROMOTION, 4096 * 2}; // really high ranking: search promotions first!
-    }
-
     // info about a position that we would like to store separately for move undo
     struct StateInfo {
         uint64_t hash = 0x927b1a7aed74a025ULL;
@@ -232,6 +206,37 @@ namespace sc {
         Side turn = WHITE_SIDE;
         bool isInCheck = false; // this flag is set by standard_moves() if it detects that the side it generated moves for is in check.
     };
+
+    // see https://github.com/official-stockfish/Stockfish/blob/0a318cdddf8b6bdd05c2e0ee9b3b61a031d398ed/src/types.h#L112
+    struct Move {
+        Square src : 6;
+        Square dst : 6;
+        PromoteType promote : 2;
+        MoveType typeFlags : 2;
+        int16_t ranking = 0; // used for move ordering
+
+        inline constexpr bool operator==(const Move rhs) const {
+            return src == rhs.src && dst == rhs.dst && promote == rhs.promote && typeFlags == rhs.typeFlags;
+        }
+
+        [[nodiscard]] inline std::string long_alg_notation() const {
+            std::string ret = sq_to_str(src) + sq_to_str(dst);
+            if (typeFlags == PROMOTION) ret += (type_to_char(static_cast<Type>(promote + 2)) + ('a' - 'A'));
+            return ret;
+        }
+
+        // note: this doesn't append stuff for check and mate. manually do that by querying it after
+        // calling make_move()
+        [[nodiscard]] std::string standard_alg_notation(Position &pos) const;
+    };
+
+    template <MoveType TYPE>
+    constexpr inline Move make_move(const Square from, const Square to) { return Move{from, to, PROMOTE_QUEEN, TYPE}; }
+    constexpr inline Move make_normal(const Square from, const Square to) { return make_move<NORMAL>(from, to); }
+    constexpr inline Move make_promotion(const Square from, const Square to, const PromoteType promote) {
+        return Move{from, to, promote, PROMOTION, 4096 * 2}; // really high ranking: search promotions first!
+    }
+
 
     void dbg_dump_position(const Position &pos);
 

@@ -16,7 +16,7 @@ using namespace sc;
 
 
 int main(int, char **) {
-    if (true) {
+    if (false) {
         sc::UCI().run();
         return 0;
     }
@@ -42,6 +42,22 @@ int main(int, char **) {
     std::cout << "Sizeof (Position) = " << sizeof(sc::Position) << std::endl;
 
     sc::Position pos;
+
+    std::string pgn;
+    int turnNum = 1;
+    auto add_and_make = [&](Move mov) {
+        if (pos.turn == WHITE_SIDE) pgn += std::to_string(turnNum++) + ". ";
+        pgn += mov.standard_alg_notation(pos);
+
+        auto ret = make_move(pos, mov);
+
+        auto numLegals = legal_moves_from(pos).size();
+        if (numLegals == 0 && pos.isInCheck) pgn += "#";
+        else if (pos.isInCheck) pgn += "+";
+        pgn += " ";
+
+        return ret;
+    };
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
                                         SDL_WINDOWPOS_CENTERED,
@@ -88,6 +104,17 @@ int main(int, char **) {
         int w, h;
         SDL_GetWindowSize(win, &w, &h);
 
+        if (legal_moves_from(pos).empty()) {
+            running = false;
+            break;
+        }
+
+        eng.start_search(64);
+        std::this_thread::sleep_for(std::chrono::seconds(8));
+        eng.stop_search();
+        undoCaps.push_back(add_and_make(eng.bestMove));
+        undoMoves.push_back(eng.bestMove);
+
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -118,7 +145,7 @@ int main(int, char **) {
                         break;
                     }
 
-                    undoCaps.push_back(sc::make_move(pos, mov));
+                    undoCaps.push_back(add_and_make(mov));
                     undoMoves.push_back(mov);
                     legalMoves.clear();
 
@@ -171,9 +198,9 @@ int main(int, char **) {
                 case SDLK_g: {
                     // auto engineMove = eng.primitive_search(pos, 3);
                     eng.start_search(64);
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    std::this_thread::sleep_for(std::chrono::seconds(2));
                     eng.stop_search();
-                    undoCaps.push_back(sc::make_move(pos, eng.bestMove));
+                    undoCaps.push_back(add_and_make(eng.bestMove));
                     undoMoves.push_back(eng.bestMove);
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;
@@ -183,11 +210,14 @@ int main(int, char **) {
                     eng.start_search(64);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                     eng.stop_search();
-                    undoCaps.push_back(sc::make_move(pos, eng.worstMove));
+                    undoCaps.push_back(add_and_make(eng.worstMove));
                     undoMoves.push_back(eng.worstMove);
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;
                 }
+                case SDLK_e:
+                    std::cout << pgn << std::endl;
+                    break;
                 case SDLK_i:
                     std::cout << "ENTER FEN> ";
                     std::string fen;
@@ -250,6 +280,7 @@ int main(int, char **) {
         SDL_Delay(1000 / 60);
     }
 
+    std::cout << pgn;
     for (auto i : font) SDL_DestroyTexture(i);
     SDL_DestroyTexture(boardTex);
     SDL_DestroyTexture(selectTex);

@@ -1,7 +1,9 @@
 #include "scacus/engine.hpp"
 #include <algorithm>
 
-#define ENABLE_TT
+#include "scacus/bitboard.hpp"
+
+#undef ENABLE_TT
 
 namespace sc {
 
@@ -25,7 +27,7 @@ namespace sc {
         inline int eval(const MoveList &legalMoves) {
             if (legalMoves.empty())
                 return pos->isInCheck ? NEARLY_MIN - depth*1000 : 0;
-            if (pos->state.halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */ ) return 0;
+            if (pos->state.halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */) return 0;
 
             auto count = [&](const Type t) {
                 return popcnt(pos->by_side(pos->turn) & pos->by_type(t)) - popcnt(pos->by_side(opposite_side(pos->turn)) & pos->by_type(t));
@@ -35,8 +37,23 @@ namespace sc {
             if (pos->turn == WHITE_SIDE) standard_moves<BLACK_SIDE>(opposingMoves, *pos);
             else standard_moves<WHITE_SIDE>(opposingMoves, *pos);
 
-            int ret = legalMoves.size() - 3*opposingMoves.size() + 108 * count(PAWN) + 305 * count(BISHOP)
-                    + 300 * count(KNIGHT) + 500 * count(ROOK) + 900 * count(QUEEN);
+            int ret = legalMoves.size() - 2*opposingMoves.size() + 315 * count(BISHOP) + 300 * count(KNIGHT) + 510 * count(ROOK) + 925 * count(QUEEN) + 110 * count(PAWN);
+
+            int prev = ret;
+            for (int rank = 1; rank < 7; rank++) {
+                int valueA = (rank-1)*(rank-1)*(rank-1);
+                int valueB = (6-rank)*(6-rank)*(6-rank);
+                Bitboard mask = (RANK1_BB << (rank * 8)) & pos->by_type(PAWN);
+                ret += (pos->turn == WHITE_SIDE ? valueA : valueB) * popcnt(mask & pos->by_side(pos->turn));
+                ret -= (pos->turn == WHITE_SIDE ? valueB : valueA) * popcnt(mask & pos->by_side(opposite_side(pos->turn)));
+            }
+
+            // punishments for stacked pawns
+            for (int file = 0; file < 8; file++) {
+                Bitboard mask = pos->by_type(PAWN) & (FILEA_BB << file);
+                ret -= (popcnt(mask & pos->by_side(pos->turn)) - 1) * 20;
+                ret += (popcnt(mask & pos->by_side(opposite_side(pos->turn))) - 1) * 15;
+            }
 
             return ret + 2*popcnt(pos->by_side(pos->turn)) - popcnt(pos->by_side(opposite_side(pos->turn)));
         }
@@ -182,12 +199,13 @@ namespace sc {
                 search.eng = this;
 
                 int result = ACTUAL_MIN;
+                int intermedRes = ACTUAL_MIN;
                 while (continueSearch && search.depth < maxDepth) {
                     search.startDepth = search.depth;
                     search.quiescenceDepthReached = maxDepth + 10;
 
                     auto undoInfo = sc::make_move(cpy, mov);
-                    int intermedRes = -search.primitive_eval(ACTUAL_MIN, std::numeric_limits<int>::max()); // -runningAlpha.load());
+                    intermedRes = -search.primitive_eval(ACTUAL_MIN, std::numeric_limits<int>::max()); // -runningAlpha.load());
                     sc::unmake_move(cpy, undoInfo, mov);
 
                     std::lock_guard<std::mutex> lg(mtx);
@@ -201,13 +219,13 @@ namespace sc {
                     else search.depth++;
                 }
 
-                auto adjust = (std::sqrt(search.depth) * 1.5 + std::cbrt((double) (search.depth - search.quiescenceDepthReached)) / 2.0);
-                double doubleRes = result + adjust;
+//                auto adjust = 0.5 * std::sqrt(std::sqrt(search.depth) * 1.5 + std::cbrt((double) (search.depth - search.quiescenceDepthReached)) / 2.0);
+                double doubleRes = result;
 //
                 std::lock_guard<std::mutex> lg2(mtx);
                 std::cout << "info string move " << mov.long_alg_notation() << " evaluates " << doubleRes / 100
-                          << " adjust " << adjust << " depth " << (search.depth-1)
-                          << " quiescence depth " << (search.depth - search.quiescenceDepthReached - 1)
+                          << " adjust " << 0 << " depth " << (search.depth-1)
+                          << " seldepth " << (search.depth - search.quiescenceDepthReached - 1)
                           << " ttOverrides " << search.overrides << '\n';
 
                 if (doubleRes > evaluation) {

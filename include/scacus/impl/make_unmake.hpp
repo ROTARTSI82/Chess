@@ -18,14 +18,12 @@ namespace sc {
     inline static constexpr void forbid_castling(Position *pos) {
         CastlingRights kingside = KINGSIDE_MASK;
         CastlingRights queenside = QUEENSIDE_MASK;
-        int zobBase;
+        int zobBase = 0;
 
         if (pos->turn == WHITE_SIDE) {
             kingside <<= 2;
             queenside <<= 2;
             zobBase = 2;
-        } else {
-            zobBase = 0;
         }
 
         if (pos->state.castlingRights & kingside) {
@@ -108,8 +106,7 @@ namespace sc {
                 pos.set(mov.dst, KING, pos.turn);
                 pos.clear(mov.src);
 
-                Square targetRook, rookNewDst;
-                std::tie(targetRook, rookNewDst) = castle_info(mov);
+                auto [targetRook, rookNewDst] = castle_info(mov);
 
                 pos.clear(targetRook);
                 pos.set(rookNewDst, ROOK, pos.turn);
@@ -172,16 +169,16 @@ namespace sc {
                 pos.set(mov.src, PAWN, pos.turn);
                 break;
             }
-            case CASTLE:
+            case CASTLE: {
                 pos.set(mov.src, KING, pos.turn);
                 pos.clear(mov.dst);
 
-                Square targetRook, rookNewDst;
-                std::tie(targetRook, rookNewDst) = castle_info(mov);
+                auto [targetRook, rookNewDst] = castle_info(mov);
 
                 pos.clear(rookNewDst);
                 pos.set(targetRook, ROOK, pos.turn);
                 break;
+            }
             default:
                 UNDEFINED();
         }
