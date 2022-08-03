@@ -79,7 +79,7 @@ namespace sc {
                 return "O-O-O"; // queenside
         }
 
-        ret += type_to_char(type_of(pos.pieces[src]));
+        ret += type_to_char(type_of(pos.piece_at(src)));
         ret += sq_to_str(src); // always fully disambiguates. I'm too lazy to make it better.
 
         if (isCapture) ret += 'x';
@@ -219,7 +219,7 @@ namespace sc {
 
     void dbg_dump_position(const Position &pos) {
         std::cout << "FEN: " << pos.get_fen() << '\n';
-        std::cout << "captured piece: " << ct_to_char(pos.state.capturedPiece) << '\n';
+        std::cout << "captured piece: " << ct_to_char(pos.get_state().capturedPiece) << '\n';
         
         std::cout << "\n\nWHITE:\n";
         print_bb(pos.by_side(WHITE_SIDE));

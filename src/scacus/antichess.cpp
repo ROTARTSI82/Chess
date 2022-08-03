@@ -19,7 +19,7 @@ namespace sc {
 
         while (iter) {
             Square sq = pop_lsb(iter);
-            Type type = type_of(pos.pieces[sq]);
+            Type type = type_of(pos.piece_at(sq));
             Bitboard tmpAtk = 0;
 
             auto add_attacks = [&]() {
@@ -51,8 +51,8 @@ namespace sc {
             switch (type) {
             case PAWN:
                 tmpAtk = pawn_attacks<SIDE>(sq);
-                if ((tmpAtk & to_bitboard(pos.state.enPassantTarget)) && pos.state.enPassantTarget != NULL_SQUARE) {
-                    captures.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
+                if ((tmpAtk & to_bitboard(pos.get_state().enPassantTarget)) && pos.get_state().enPassantTarget != NULL_SQUARE) {
+                    captures.push_back(make_move<EN_PASSANT>(sq, pos.get_state().enPassantTarget));
                 }
 
                 tmpAtk &= capturePos;
@@ -147,23 +147,23 @@ namespace sc {
         if (legalMoves.empty()) return ACTUAL_MAX;
 
         auto count = [&](const Type t) {
-            return popcnt(pos.by_side(opposite_side(pos.turn)) & pos.by_type(t)) - popcnt(pos.by_side(pos.turn) & pos.by_type(t));
+            return popcnt(pos.by_side(opposite_side(pos.get_turn())) & pos.by_type(t)) - popcnt(pos.by_side(pos.get_turn()) & pos.by_type(t));
         };
 
-        auto opposingMoves = pos.turn == WHITE_SIDE ? antichess_moves<BLACK_SIDE>(pos) : antichess_moves<WHITE_SIDE>(pos);
+        auto opposingMoves = pos.get_turn() == WHITE_SIDE ? antichess_moves<BLACK_SIDE>(pos) : antichess_moves<WHITE_SIDE>(pos);
 
         return (opposingMoves.size() - legalMoves.size()) + 100 * count(PAWN) + 300 * count(BISHOP) + 300 * count(KNIGHT) + 500 * count(ROOK) + 900 * count(QUEEN) + 200 * count(KING);
     }
 
     static inline int anti_quiescence_search(Position &pos, int alpha, int beta) {
-        auto legalMoves = pos.turn == WHITE_SIDE ? antichess_moves<WHITE_SIDE>(pos) : antichess_moves<BLACK_SIDE>(pos);
+        auto legalMoves = pos.get_turn() == WHITE_SIDE ? antichess_moves<WHITE_SIDE>(pos) : antichess_moves<BLACK_SIDE>(pos);
         int stand_pat = antichess_eval(pos, legalMoves);
         if (stand_pat >= beta)
             return stand_pat;
         alpha = std::max(stand_pat, alpha);
 
         for (const auto mov : legalMoves) {
-            if ((pos.by_side(opposite_side(pos.turn)) & to_bitboard(mov.dst)) || mov.typeFlags == EN_PASSANT) {
+            if ((pos.by_side(opposite_side(pos.get_turn())) & to_bitboard(mov.dst)) || mov.typeFlags == EN_PASSANT) {
                 auto undo = sc::antichess_make_move(pos, mov);
                 int score = -anti_quiescence_search(pos, -beta, -alpha);
                 sc::antichess_unmake_move(pos, undo, mov);
@@ -183,7 +183,7 @@ namespace sc {
             return anti_quiescence_search(pos, alpha, beta);
         }
 
-        auto legalMoves = pos.turn == WHITE_SIDE ? antichess_moves<WHITE_SIDE>(pos) : antichess_moves<BLACK_SIDE>(pos);
+        auto legalMoves = pos.get_turn() == WHITE_SIDE ? antichess_moves<WHITE_SIDE>(pos) : antichess_moves<BLACK_SIDE>(pos);
         if (legalMoves.empty())
             return ACTUAL_MAX;
 
@@ -206,7 +206,7 @@ namespace sc {
     #define MULTITHREAD 1
 
     std::pair<Move, int> antichess_search(Position &pos, int depth) {
-        auto legalMoves = pos.turn == WHITE_SIDE ? antichess_moves<WHITE_SIDE>(pos) : antichess_moves<BLACK_SIDE>(pos);
+        auto legalMoves = pos.get_turn() == WHITE_SIDE ? antichess_moves<WHITE_SIDE>(pos) : antichess_moves<BLACK_SIDE>(pos);
         // std::cout << pos.get_fen() << '\n';
         // for (const auto m : legalMoves)
         //     std::cout << '\t' << m.long_alg_notation();

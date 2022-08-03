@@ -59,7 +59,7 @@ while True:
 
         fenCmd = "position fen %s moves %s" % (fen, " ".join(moves[:it]))
         proc.stdin.write(fenCmd + "\ngo movetime 1000\n")
-        time.sleep(3)
+        time.sleep(2)
         print("[*]\t", end='', flush=True)
         for line in proc.stdout:
             if "bestmove" in line:

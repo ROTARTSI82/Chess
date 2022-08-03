@@ -1,66 +1,73 @@
-// DO NOT DIRECTLY INCLUDE THIS FILE
-// THIS IS PART OF movegen.hpp!!
+#include "scacus/movegen.hpp"
+
+namespace sc::makeimpl {
+    using namespace sc;
+
+    struct PositionFriend {
+        inline static constexpr std::pair<Square, Square> castle_info(const Move mov) {
+            Square targetRook = 0, rookNewDst = 0;
+            if ((int) mov.dst - (int) mov.src > 0) { // kingside castling
+                targetRook = mov.src + 3 * Dir::E;
+                rookNewDst = mov.dst + Dir::W;
+            } else {
+                rookNewDst = mov.dst + Dir::E;
+                targetRook = mov.src + 4 * Dir::W;
+            }
+            return std::make_pair(targetRook, rookNewDst);
+        }
+
+        inline static constexpr void forbid_castling(Position *pos) {
+            CastlingRights kingside = KINGSIDE_MASK;
+            CastlingRights queenside = QUEENSIDE_MASK;
+            int zobBase = 0;
+
+            if (pos->turn == WHITE_SIDE) {
+                kingside <<= 2;
+                queenside <<= 2;
+                zobBase = 2;
+            }
+
+            if (pos->state.castlingRights & kingside) {
+                pos->state.hash ^= zob_CastlingRights[zobBase + 1];
+            }
+            if (pos->state.castlingRights & queenside) {
+                pos->state.hash ^= zob_CastlingRights[zobBase];
+            }
+
+            pos->state.castlingRights &= ~(kingside | queenside);
+        }
+
+        inline static constexpr void remove_castling_rights(Position *pos, const Square rookSq, Side side) {
+            const auto file = file_ind_of(rookSq);
+            const auto rank = rank_ind_of(rookSq);
+
+            // this rook is not on a square of a castling rook, so it does not affect castling rights.
+            if (file != 0 && file != 7) return;
+
+            int zobIndex = file == 0 ? 0 // queenside (1)
+                                     : 1; // kingside (2)
+
+            if (side == WHITE_SIDE) {
+                if (rank != 0) return;
+                zobIndex += 2;
+            } else {
+                if (rank != 7) return;
+            }
+
+            CastlingRights mask = 1 << zobIndex;
+            // if we have the right (i.e. we actually unset it), flip the hash
+            if (pos->state.castlingRights & mask) {
+                pos->state.hash ^= zob_CastlingRights[zobIndex];
+                pos->state.castlingRights &= ~mask;
+            }
+        }
+    };
+}
 
 namespace sc {
+    using namespace makeimpl;
 
-    inline static constexpr std::pair<Square, Square> castle_info(const Move mov) {
-        Square targetRook = 0, rookNewDst = 0;
-        if ((int) mov.dst - (int) mov.src > 0) { // kingside castling
-            targetRook = mov.src + 3 * Dir::E;
-            rookNewDst = mov.dst + Dir::W;
-        } else {
-            rookNewDst = mov.dst + Dir::E;
-            targetRook = mov.src + 4 * Dir::W;
-        }
-        return std::make_pair(targetRook, rookNewDst);
-    }
-
-    inline static constexpr void forbid_castling(Position *pos) {
-        CastlingRights kingside = KINGSIDE_MASK;
-        CastlingRights queenside = QUEENSIDE_MASK;
-        int zobBase = 0;
-
-        if (pos->turn == WHITE_SIDE) {
-            kingside <<= 2;
-            queenside <<= 2;
-            zobBase = 2;
-        }
-
-        if (pos->state.castlingRights & kingside) {
-            pos->state.hash ^= zob_CastlingRights[zobBase + 1];
-        } if (pos->state.castlingRights & queenside) {
-            pos->state.hash ^= zob_CastlingRights[zobBase];
-        }
-
-        pos->state.castlingRights &= ~(kingside | queenside);
-    }
-
-    inline static constexpr void remove_castling_rights(Position *pos, const Square rookSq, Side side) {
-        const auto file = file_ind_of(rookSq);
-        const auto rank = rank_ind_of(rookSq);
-
-        // this rook is not on a square of a castling rook, so it does not affect castling rights.
-        if (file != 0 && file != 7) return;
-
-        int zobIndex = file == 0 ? 0 // queenside (1)
-                                 : 1; // kingside (2)
-
-        if (side == WHITE_SIDE) {
-            if (rank != 0) return;
-            zobIndex += 2;
-        } else {
-            if (rank != 7) return;
-        }
-
-        CastlingRights mask = 1 << zobIndex;
-        // if we have the right (i.e. we actually unset it), flip the hash
-        if (pos->state.castlingRights & mask) {
-            pos->state.hash ^= zob_CastlingRights[zobIndex];
-            pos->state.castlingRights &= ~mask;
-        }
-    }
-
-    inline constexpr StateInfo make_move(Position &pos, const Move mov) {
+    StateInfo make_move(Position &pos, const Move mov) {
         StateInfo ret = pos.state;
 
         if (pos.turn == BLACK_SIDE) pos.fullmoves++;
@@ -91,10 +98,10 @@ namespace sc {
                         }
                         break;
                     case KING:
-                        forbid_castling(&pos);
+                        PositionFriend::forbid_castling(&pos);
                         break;
                     case ROOK: {
-                        remove_castling_rights(&pos, mov.src, pos.turn);
+                        PositionFriend::remove_castling_rights(&pos, mov.src, pos.turn);
                         break;
                     }
                     default:
@@ -106,12 +113,12 @@ namespace sc {
                 pos.set(mov.dst, KING, pos.turn);
                 pos.clear(mov.src);
 
-                auto [targetRook, rookNewDst] = castle_info(mov);
+                auto [targetRook, rookNewDst] = PositionFriend::castle_info(mov);
 
                 pos.clear(targetRook);
                 pos.set(rookNewDst, ROOK, pos.turn);
 
-                forbid_castling(&pos);
+                PositionFriend::forbid_castling(&pos);
                 break;
             }
             case EN_PASSANT: {
@@ -134,7 +141,7 @@ namespace sc {
         }
 
         if (type_of(pos.state.capturedPiece) == ROOK)
-            remove_castling_rights(&pos, mov.dst, side_of(pos.state.capturedPiece));
+            PositionFriend::remove_castling_rights(&pos, mov.dst, side_of(pos.state.capturedPiece));
 
         pos.turn = opposite_side(pos.turn);
         pos.state.hash ^= zob_IsWhiteTurn; // no need to reset because it is stored in state!
@@ -143,7 +150,7 @@ namespace sc {
         return ret;
     }
 
-    inline constexpr void unmake_move(Position &pos, const StateInfo &info, const Move mov) {
+    void unmake_move(Position &pos, const StateInfo &info, const Move mov) {
 //        pos.threefoldTable[pos.state.hash]--;
 
         pos.turn = opposite_side(pos.turn);
@@ -173,7 +180,7 @@ namespace sc {
                 pos.set(mov.src, KING, pos.turn);
                 pos.clear(mov.dst);
 
-                auto [targetRook, rookNewDst] = castle_info(mov);
+                auto [targetRook, rookNewDst] = PositionFriend::castle_info(mov);
 
                 pos.clear(rookNewDst);
                 pos.set(targetRook, ROOK, pos.turn);

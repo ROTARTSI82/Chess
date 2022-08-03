@@ -1,8 +1,9 @@
 #pragma once
 
-#include "scacus/bitboard.hpp"
+#include "scacus/move_list.hpp"
 
 #include <functional>
+#include <execution>
 
 namespace sc {
     extern Bitboard KNIGHT_MOVES[BOARD_SIZE];
@@ -10,6 +11,22 @@ namespace sc {
     extern Bitboard PAWN_MOVES[NUM_SIDES][BOARD_SIZE];
     extern Bitboard KING_MOVES[BOARD_SIZE];
     extern Bitboard PIN_LINE[BOARD_SIZE][BOARD_SIZE];
+
+    /* struct MovegenInfo {
+        MovegenInfo();
+
+        Bitboard KNIGHT_MOVES[BOARD_SIZE];
+        Bitboard PAWN_ATTACKS[NUM_SIDES][BOARD_SIZE];
+        Bitboard PAWN_MOVES[NUM_SIDES][BOARD_SIZE];
+        Bitboard KING_MOVES[BOARD_SIZE];
+        Bitboard PIN_LINE[BOARD_SIZE][BOARD_SIZE];
+
+        static inline constexpr const MovegenInfo &get() {
+            static MovegenInfo val{};
+            return val;
+        }
+    }; */
+
 
     inline constexpr Bitboard pawn_attacks_old(Side side, Square sq) {
         return PAWN_ATTACKS[side][sq];
@@ -49,11 +66,7 @@ namespace sc {
         Bitboard *table = nullptr;
         Bitboard mask = 0;  // to mask relevant squares of both lines (no outer squares)
         Bitboard magic = 0; // magic 64-bit factor to multiply by
-        uint8_t shift = 0; // shift right
-
-        ~Magic() {
-            delete[] table;
-        }
+        uint64_t shift = 0; // shift right. only a uint8_t is needed but we don't wanna screw with alignment.
     };
 
     extern Magic ROOK_MAGICS[BOARD_SIZE];
@@ -63,7 +76,12 @@ namespace sc {
 
     template <Magic *TABLE>
     constexpr inline int occupancy_to_index(const Square sq, const uint64_t occupancy) {
-        auto &entry = TABLE[sq]; return ((entry.mask & occupancy) * entry.magic) >> entry.shift;
+        const auto &entry = TABLE[sq];
+
+        // stolen from stockfish: Fancy Pext bitboards.
+        // Not any faster than multiplication + shift, sadly.
+        //return _pext_u64(occupancy, entry.mask);
+        return ((entry.mask & occupancy) * entry.magic) >> entry.shift;
     }
 
     template <Magic *TABLE>
@@ -80,81 +98,26 @@ namespace sc {
 
     void init_movegen();
 
-    class MoveList {
-    public:
-        Move *head = nullptr;
-        Move *tail = nullptr;
+    template <Side SIDE>
+    void standard_moves(MoveList &ls, Position &pos);
+    extern template void standard_moves<BLACK_SIDE>(MoveList &, Position &);
+    extern template void standard_moves<WHITE_SIDE>(MoveList &, Position &);
 
-        inline MoveList() = delete;
+    StateInfo make_move(Position &pos, const Move mov);
+    void unmake_move(Position &pos, const StateInfo &info, const Move mov);
 
-        MoveList &operator=(const MoveList &&rhs) noexcept = delete;;
-        MoveList(const MoveList &rhs) noexcept = delete;
+    inline constexpr void legal_moves_from(MoveList &ls, Position &pos) {
+        if (pos.get_turn() == WHITE_SIDE)
+            standard_moves<WHITE_SIDE>(ls, pos);
+        else
+            standard_moves<BLACK_SIDE>(ls, pos);
+    }
 
-        inline explicit MoveList(int) : head(new Move[4096]), tail(head) {};
-
-        inline ~MoveList() {
-            delete[] head;
-        }
-
-        inline MoveList &operator=(MoveList &&rhs) noexcept {
-            // skipping same-identity check
-            // if (&rhs == this) return *this;
-
-            head = rhs.head;
-            tail = rhs.tail;
-            rhs.head = nullptr;
-            return *this;
-        }
-
-        inline MoveList(MoveList &&rhs) noexcept : head(rhs.head), tail(rhs.tail) {
-            rhs.head = nullptr;
-        }
-
-        inline void push_back(const Move &mov) {
-            *tail++ = mov;
-        }
-
-        inline void push_back(Move &&mov) {
-            *tail++ = mov;
-        }
-
-        [[nodiscard]] inline bool empty() const {
-            return tail == head;
-        }
-
-        [[nodiscard]] inline std::size_t size() const {
-            return tail - head;
-        }
-
-        [[nodiscard]] inline Move *begin() const {
-            return head;
-        }
-
-        [[nodiscard]] inline Move *end() const {
-            return tail;
-        }
-
-        [[nodiscard]] inline Move &at(std::size_t x) const {
-            return head[x];
-        }
-
-        inline void clear() {
-            tail = head;
-        }
-    };
-
-//    template <Side SIDE>
-//    MoveList standard_moves(Position &pos);
-
-//    inline MoveList legal_moves_from(Position &pos) {
-//        return pos.turn == WHITE_SIDE ? standard_moves<WHITE_SIDE>(pos) : standard_moves<BLACK_SIDE>(pos);
-//    }
-
-//    StateInfo make_move(Position &pos, const Move mov);
-//    void unmake_move(Position &pos, const StateInfo &info, const Move mov);
+    inline MoveList legal_moves_from(Position &pos) {
+        MoveList legals(0);
+        legal_moves_from(legals, pos);
+        return legals;
+    }
 }
 
-
-#include "scacus/impl/std_moves.hpp"
-#include "scacus/impl/make_unmake.hpp"
 

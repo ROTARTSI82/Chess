@@ -26,36 +26,35 @@ namespace sc {
 
         inline int eval(const MoveList &legalMoves) {
             if (legalMoves.empty())
-                return pos->isInCheck ? NEARLY_MIN - depth*1000 : 0;
-            if (pos->state.halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */) return 0;
+                return pos->in_check() ? NEARLY_MIN - depth*1000 : 0;
+            if (pos->get_state().halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */) return 0;
 
             auto count = [&](const Type t) {
-                return popcnt(pos->by_side(pos->turn) & pos->by_type(t)) - popcnt(pos->by_side(opposite_side(pos->turn)) & pos->by_type(t));
+                return popcnt(pos->by_side(pos->get_turn()) & pos->by_type(t)) - popcnt(pos->by_side(opposite_side(pos->get_turn())) & pos->by_type(t));
             };
 
             MoveList opposingMoves(0);
-            if (pos->turn == WHITE_SIDE) standard_moves<BLACK_SIDE>(opposingMoves, *pos);
+            if (pos->get_turn() == WHITE_SIDE) standard_moves<BLACK_SIDE>(opposingMoves, *pos);
             else standard_moves<WHITE_SIDE>(opposingMoves, *pos);
 
             int ret = legalMoves.size() - 2*opposingMoves.size() + 315 * count(BISHOP) + 300 * count(KNIGHT) + 510 * count(ROOK) + 925 * count(QUEEN) + 110 * count(PAWN);
 
-            int prev = ret;
             for (int rank = 1; rank < 7; rank++) {
                 int valueA = (rank-1)*(rank-1)*(rank-1);
                 int valueB = (6-rank)*(6-rank)*(6-rank);
                 Bitboard mask = (RANK1_BB << (rank * 8)) & pos->by_type(PAWN);
-                ret += (pos->turn == WHITE_SIDE ? valueA : valueB) * popcnt(mask & pos->by_side(pos->turn));
-                ret -= (pos->turn == WHITE_SIDE ? valueB : valueA) * popcnt(mask & pos->by_side(opposite_side(pos->turn)));
+                ret += (pos->get_turn() == WHITE_SIDE ? valueA : valueB) * popcnt(mask & pos->by_side(pos->get_turn()));
+                ret -= (pos->get_turn() == WHITE_SIDE ? valueB : valueA) * popcnt(mask & pos->by_side(opposite_side(pos->get_turn())));
             }
 
             // punishments for stacked pawns
             for (int file = 0; file < 8; file++) {
                 Bitboard mask = pos->by_type(PAWN) & (FILEA_BB << file);
-                ret -= (popcnt(mask & pos->by_side(pos->turn)) - 1) * 20;
-                ret += (popcnt(mask & pos->by_side(opposite_side(pos->turn))) - 1) * 15;
+                ret -= (popcnt(mask & pos->by_side(pos->get_turn())) - 1) * 20;
+                ret += (popcnt(mask & pos->by_side(opposite_side(pos->get_turn()))) - 1) * 15;
             }
 
-            return ret + 2*popcnt(pos->by_side(pos->turn)) - popcnt(pos->by_side(opposite_side(pos->turn)));
+            return ret + 2*popcnt(pos->by_side(pos->get_turn())) - popcnt(pos->by_side(opposite_side(pos->get_turn())));
         }
 
         inline int quiescence_search(int alpha, int beta) {
@@ -73,8 +72,8 @@ namespace sc {
 //                return alpha;
 
             for (const auto mov : legalMoves) {
-                if ((pos->by_side(opposite_side(pos->turn)) & to_bitboard(mov.dst)) || mov.typeFlags == EN_PASSANT) {
-                    auto undo = sc::make_move(*pos, mov);
+                if ((pos->by_side(opposite_side(pos->get_turn())) & to_bitboard(mov.dst)) || mov.typeFlags == EN_PASSANT) {
+                    StateInfo undo = sc::make_move(*pos, mov);
 
                     depth--;
                     int score = -quiescence_search(-beta, -alpha);
@@ -101,8 +100,8 @@ namespace sc {
             MoveList legalMoves(0);
             legal_moves_from(legalMoves, *pos);
             if (legalMoves.empty())
-                return pos->isInCheck ? NEARLY_MIN - depth*1000 : 0;
-            if (pos->state.halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */) {
+                return pos->in_check() ? NEARLY_MIN - depth*1000 : 0;
+            if (pos->get_state().halfmoves >= 50 /* || pos->threefoldTable[pos->state.hash] >= 3 */) {
                 return 0;
             }
 
@@ -131,14 +130,14 @@ namespace sc {
             int value = ACTUAL_MIN;
             Move bestMove;
             for (const auto mov : legalMoves) {
-                auto undoInfo = sc::make_move(*pos, mov);
-                ColoredType captured = pos->state.capturedPiece;
+                StateInfo undo = sc::make_move(*pos, mov);
+                ColoredType captured = pos->get_state().capturedPiece;
 
                 depth--;
                 auto result = -primitive_eval(-beta, -alpha);
                 depth++;
 
-                sc::unmake_move(*pos, undoInfo, mov);
+                sc::unmake_move(*pos, undo, mov);
 
                 if (result > value) {
                     bestMove = mov;
@@ -147,7 +146,7 @@ namespace sc {
 
                 if (value >= beta) {
                     if (captured != NULL_COLORED_TYPE)
-                        eng->history[pos->turn][mov.src][mov.dst] = (startDepth-depth) * (startDepth-depth);
+                        eng->history[pos->get_turn()][mov.src][mov.dst] = (startDepth-depth) * (startDepth-depth);
                     return value;
                 }
                 
@@ -204,7 +203,7 @@ namespace sc {
                     search.startDepth = search.depth;
                     search.quiescenceDepthReached = maxDepth + 10;
 
-                    auto undoInfo = sc::make_move(cpy, mov);
+                    StateInfo undoInfo = sc::make_move(cpy, mov);
                     intermedRes = -search.primitive_eval(ACTUAL_MIN, std::numeric_limits<int>::max()); // -runningAlpha.load());
                     sc::unmake_move(cpy, undoInfo, mov);
 
@@ -265,9 +264,9 @@ namespace sc {
                 mov.ranking = 512; // he he, en passant!
             } else if (to_bitboard(mov.dst) & occ) {
                 // lower the type_of, the more valuable
-                mov.ranking = 512 + (int) type_of(pos->pieces[mov.src]) - (int) type_of(pos->pieces[mov.dst]);
+                mov.ranking = 512 + (int) type_of(pos->piece_at(mov.src)) - (int) type_of(pos->piece_at(mov.dst));
             } else if (mov.ranking == 0) {
-                mov.ranking = history[pos->turn][mov.src][mov.dst];
+                mov.ranking = history[pos->get_turn()][mov.src][mov.dst];
             }
         }
 

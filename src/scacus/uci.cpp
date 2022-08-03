@@ -12,6 +12,35 @@ namespace sc {
 
 #define COUT std::cout
 
+    template <bool ROOT>
+    uint64_t perft2(Position &pos, int depth) {
+        sc::MoveList legals = legal_moves_from(pos);
+        uint64_t ret = 0, res = 0;
+        const bool leaf_coneybear = (depth == 2);
+
+        for (const auto &m : legals) {
+
+            if (!ROOT || depth > 1) {
+                StateInfo undo = sc::make_move(pos, m);
+                if (leaf_coneybear)
+                    ret += (res = legal_moves_from(pos).size());
+                else
+                    ret += (res = perft2<false>(pos, depth - 1));
+                sc::unmake_move(pos, undo, m);
+            } else {
+                res = 1;
+                ret++;
+            }
+
+            if constexpr (ROOT)
+                std::cout << m.long_alg_notation() << ": " << res << '\n';
+        }
+
+        return ret;
+    }
+    template uint64_t perft2<true>(Position &, int);
+    template uint64_t perft2<false>(Position &, int);
+
     void workerFunc(UCI *uci) {
         auto start = std::chrono::high_resolution_clock::now();
         sc::init_movegen();
@@ -39,28 +68,6 @@ namespace sc {
             // COUT << "bestmove " << uci->eng.primitive_search(cpy, 3).first.long_alg_notation() << '\n';
             uci->go = false;
         }
-    }
-
-    template <bool ROOT>
-    static uint64_t perft2(Position &pos, int depth) {
-        uint64_t ret = 0;
-
-        sc::MoveList legals = legal_moves_from(pos);
-        for (const auto &m : legals) {
-            uint64_t res = 1;
-
-            if (!ROOT || depth > 1) {
-                sc::StateInfo undo = sc::make_move(pos, m);
-                res = depth == 2 ? legal_moves_from(pos).size() : perft2 < false > (pos, depth - 1);
-                sc::unmake_move(pos, undo, m);
-            }
-
-            ret += res;
-            if constexpr (ROOT)
-                std::cout << m.long_alg_notation() << ": " << res << '\n';
-        }
-
-        return ret;
     }
 
     void UCI::run() {
@@ -115,7 +122,7 @@ namespace sc {
                 if ((pos.by_type(KING) & to_bitboard(mov.src)) && std::abs(mov.dst - mov.src) == 2)
                     mov.typeFlags = CASTLE;
 
-                if (pos.state.enPassantTarget == mov.dst)
+                if (pos.get_state().enPassantTarget == mov.dst)
                     mov.typeFlags = EN_PASSANT;
 
                 if (variant == Variant::ANTICHESS)

@@ -1,5 +1,4 @@
-// DO NOT DIRECTLY INCLUDE THIS FILE
-// THIS IS PART OF movegen.hpp!!
+#include "scacus/movegen.hpp"
 
 #define ACCUM_MOVES(FUN, BB, LAND, LS, POS) {                   \
     Bitboard _scacus_bb = BB;                                   \
@@ -14,7 +13,7 @@
 namespace sc {
 
     template <Side SIDE>
-    inline constexpr void standard_moves(MoveList &ls, Position &pos) {
+    void standard_moves(MoveList &ls, Position &pos) {
         pos.isInCheck = false;
 
         const Bitboard opponent = pos.by_side(opposite_side(SIDE));
@@ -62,7 +61,7 @@ namespace sc {
         {
             // opponent's sliders which can be pinning
             Bitboard sliders = (lookup<BISHOP_MAGICS>(kingSq, opponent) & (pos.by_type(BISHOP) | pos.by_type(QUEEN)))
-                    | (lookup<ROOK_MAGICS>(kingSq, opponent) & (pos.by_type(ROOK) | pos.by_type(QUEEN)));
+                               | (lookup<ROOK_MAGICS>(kingSq, opponent) & (pos.by_type(ROOK) | pos.by_type(QUEEN)));
             sliders &= opponent & ~checkers;
 
             while (sliders) {
@@ -138,16 +137,15 @@ namespace sc {
                     destinations &= pinLines[SQ];
 
                 Bitboard promotions = destinations & (rank_bb(8) | rank_bb(1));
-                destinations &= ~promotions;
-
-                while (destinations)
-                    ls.push_back(make_normal(SQ, pop_lsb(destinations)));
-
                 while (promotions) {
                     Square dst = pop_lsb(promotions);
                     for (PromoteType to: {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK})
                         ls.push_back(make_promotion(SQ, dst, to));
                 }
+
+                destinations &= ~(rank_bb(8) | rank_bb(1));
+                while (destinations)
+                    ls.push_back(make_normal(SQ, pop_lsb(destinations)));
             }
         }
 
@@ -185,33 +183,24 @@ namespace sc {
                                                      + (SIDE == BLACK_SIDE ? Dir::N : Dir::S));
 
                 // if we are pinned, we need to land on the pin line
-                #define PIN_PASSED !(bb & pinned) || (ep & pinLines[sq])
+#define PIN_PASSED !(bb & pinned) || (ep & pinLines[sq])
 
                 // if we are in check, we need to capture the checker or land between the king & checker (landings)
-                #define CHECK_PASSED !checkers || (ep & landing) || (capPawn & checkers)
+#define CHECK_PASSED !checkers || (ep & landing) || (capPawn & checkers)
 
                 // Taking en passant can be disallowed if it reveals a check to a rook or queen on the side
                 // see 8/8/8/3KPp1r/8/8/8/8 w - f6 0 1
-                #define SEES_KING lookup<ROOK_MAGICS>(kingSq, occ ^ bb ^ capPawn ^ ep)
-                #define TARGET_PASSED !(SEES_KING & ~checkers & opponent & \
+#define SEES_KING lookup<ROOK_MAGICS>(kingSq, occ ^ bb ^ capPawn ^ ep)
+#define TARGET_PASSED !(SEES_KING & ~checkers & opponent & \
                                        (pos.by_type(QUEEN) | pos.by_type(ROOK)))
 
                 if ((PIN_PASSED) && (CHECK_PASSED) && (TARGET_PASSED))
-                    ls.push_back(make_move<EN_PASSANT>(sq, pos.state.enPassantTarget));
+                    ls.push_back(make_move<EN_PASSANT>(sq, pos.get_state().enPassantTarget));
             }
         }
     }
 
-    inline constexpr void legal_moves_from(MoveList &ls, Position &pos) {
-        if (pos.turn == WHITE_SIDE)
-            standard_moves<WHITE_SIDE>(ls, pos);
-        else
-            standard_moves<BLACK_SIDE>(ls, pos);
-    }
+    template void standard_moves<BLACK_SIDE>(MoveList &, Position &);
+    template void standard_moves<WHITE_SIDE>(MoveList &, Position &);
 
-    inline MoveList legal_moves_from(Position &pos) {
-        MoveList legals(0);
-        legal_moves_from(legals, pos);
-        return legals;
-    }
 }

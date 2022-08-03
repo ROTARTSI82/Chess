@@ -10,8 +10,8 @@ add_link_options(-fno-exceptions -flto -Ofast -march=x86-64-v3 -std=c++20 -Wall 
 # stockfish flags
 # CXXFLAGS:  -Wall -Wcast-qual -fno-exceptions -std=c++17  -pedantic -Wextra -Wshadow -m64 -DUSE_PTHREADS -DNDEBUG -O3 -fexperimental-new-pass-manager -DIS_64BIT -msse -msse3 -mpopcnt -DUSE_POPCNT -DUSE_AVX2 -mavx2 -DUSE_SSE41 -msse4.1 -DUSE_SSSE3 -mssse3 -DUSE_SSE2 -msse2 -DUSE_PEXT -mbmi2 -flto
 # LDFLAGS:   -latomic -m64 -lpthread  -Wall -Wcast-qual -fno-exceptions -std=c++17  -pedantic -Wextra -Wshadow -m64 -DUSE_PTHREADS -DNDEBUG -O3 -fexperimental-new-pass-manager -DIS_64BIT -msse -msse3 -mpopcnt -DUSE_POPCNT -DUSE_AVX2 -mavx2 -DUSE_SSE41 -msse4.1 -DUSE_SSSE3 -mssse3 -DUSE_SSE2 -msse2 -DUSE_PEXT -mbmi2 -flto
-add_compile_options(-fexperimental-new-pass-manager -m64 -msse -msse3 -mpopcnt -mavx2 -msse4.1 -mssse3 -msse2 -mbmi2)
-add_link_options(-fexperimental-new-pass-manager -m64 -msse -msse3 -mpopcnt -mavx2 -msse4.1 -mssse3 -msse2 -mbmi2)
+add_compile_options(-m64 -msse -msse3 -mpopcnt -mavx2 -msse4.1 -mssse3 -msse2 -mbmi2)
+add_link_options(-m64 -msse -msse3 -mpopcnt -mavx2 -msse4.1 -mssse3 -msse2 -mbmi2)
 
 option(USE_ASAN "" false)
 option(USE_SDL "" false)
@@ -34,8 +34,9 @@ endif()
 
 
 if (USE_DBG)
-    add_compile_options(-g3 -fno-omit-frame-pointer)
-    add_link_options(-g3 -fno-omit-frame-pointer)
+    message("-- !! Debug symbols enabled!!")
+    add_compile_options(-g3 -glldb -fno-omit-frame-pointer)
+    add_link_options(-g3 -glldb -fno-omit-frame-pointer)
 endif()
 
 if (USE_ASAN)
@@ -56,6 +57,7 @@ endif()
 
 file(GLOB_RECURSE SCACUS_SOURCES CONFIGURE_DEPENDS src/*.cpp)
 
+message("-- sources = ${SCACUS_SOURCES}")
 add_executable(Scacus ${SCACUS_SOURCES})
 target_include_directories(Scacus PUBLIC include src)
 # target_include_directories(Chess PUBLIC dep/SDL/include dep/SDL_image)

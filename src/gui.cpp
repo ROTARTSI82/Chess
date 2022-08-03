@@ -21,11 +21,10 @@ int main(int, char **) {
         return 0;
     }
 
-    if (false) {
-        auto uci = sc::UCI();
-        uci.process_cmd("isready");
-        uci.process_cmd("go perft 6");
-        uci.process_cmd("quit");
+    if (true) {
+        sc::init_movegen();
+        Position pos{};
+        run_perft(pos, 6);
         return 0;
     }
 
@@ -49,7 +48,8 @@ int main(int, char **) {
         if (pos.turn == WHITE_SIDE) pgn += std::to_string(turnNum++) + ". ";
         pgn += mov.standard_alg_notation(pos);
 
-        auto ret = make_move(pos, mov);
+        StateInfo ret;
+        make_move(pos, mov, &ret);
 
         auto numLegals = legal_moves_from(pos).size();
         if (numLegals == 0 && pos.isInCheck) pgn += "#";

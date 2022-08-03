@@ -17,14 +17,20 @@
 
 #define UNDEFINED() __builtin_unreachable()
 
+namespace sc::makeimpl {
+    struct PositionFriend;
+}
+
 namespace sc {
+    class Position;
+
     constexpr auto BOARD_SIZE = 64;
     constexpr auto STARTING_POS_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     constexpr auto NULL_SQUARE = 255;
 
-    typedef uint8_t Square;
-    typedef uint64_t Bitboard;
+    typedef uint_fast8_t Square;
+    typedef uint_fast64_t Bitboard;
 
     constexpr Bitboard RANK1_BB =      0x00000000000000FF;
     constexpr Bitboard FILEA_BB =      0x0101010101010101;
@@ -77,7 +83,7 @@ namespace sc {
     inline constexpr Bitboard to_bitboard(const Square s) { return 1ULL << s; }
     inline constexpr Bitboard bb_rank_file(char file, int rank) { return to_bitboard(make_square(file, rank)); }
 
-    enum Type : uint8_t {
+    enum Type : uint_fast8_t {
         NULL_TYPE = 0,
         KING = 1, QUEEN, ROOK, BISHOP, KNIGHT, PAWN,
         NUM_UNCOLORED_PIECE_TYPES
@@ -88,7 +94,7 @@ namespace sc {
         return table[t];
     }
 
-    enum ColoredType : uint8_t {
+    enum ColoredType : uint_fast8_t {
         NULL_COLORED_TYPE = 0,
         BLACK_KING = 1, BLACK_QUEEN, BLACK_ROOK, BLACK_BISHOP, BLACK_KNIGHT, BLACK_PAWN,
         // 7th and 8th slots wasted
@@ -96,7 +102,7 @@ namespace sc {
         NUM_COLORED_PIECE_TYPES
     };
 
-    enum Side : uint8_t {
+    enum Side : uint_fast8_t {
         BLACK_SIDE = 0, WHITE_SIDE = 1, NUM_SIDES
     };
 
@@ -116,13 +122,13 @@ namespace sc {
 
     Type type_from_char(const char c);
 
-    typedef uint8_t CastlingRights;
+    typedef uint_fast8_t CastlingRights;
 
     // rule: shift left 2 if white
     constexpr uint8_t KINGSIDE_MASK =  0b10;
     constexpr uint8_t QUEENSIDE_MASK = 0b01;
 
-    enum PromoteType : uint8_t {
+    enum PromoteType : uint_fast8_t {
         PROMOTE_QUEEN = 0, PROMOTE_ROOK, PROMOTE_BISHOP, PROMOTE_KNIGHT
     };
 
@@ -143,7 +149,7 @@ namespace sc {
         CASTLING_ATTACK_MASKS[3]
     };
 
-    enum MoveType : uint8_t {
+    enum MoveType : uint_fast8_t {
         NORMAL = 0, PROMOTION, EN_PASSANT, CASTLE
     };
 
@@ -166,6 +172,31 @@ namespace sc {
 
     // TODO: This wastes a TON of memory but we don't really care, right?
     extern uint64_t zob_Pieces[BOARD_SIZE][NUM_COLORED_PIECE_TYPES];
+
+    // see https://github.com/official-stockfish/Stockfish/blob/0a318cdddf8b6bdd05c2e0ee9b3b61a031d398ed/src/types.h#L112
+    struct Move {
+        Square src; // : 6
+        Square dst; // : 6
+        PromoteType promote; // : 2
+        MoveType typeFlags; // : 2
+        int_fast16_t ranking; // used for move ordering
+
+        inline constexpr bool operator==(const Move rhs) const {
+            return src == rhs.src && dst == rhs.dst && promote == rhs.promote && typeFlags == rhs.typeFlags;
+        }
+
+        [[nodiscard]] inline std::string long_alg_notation() const {
+            std::string ret = sq_to_str(src) + sq_to_str(dst);
+            if (typeFlags == PROMOTION) ret += (type_to_char(static_cast<Type>(promote + 2)) + ('a' - 'A'));
+            return ret;
+        }
+
+        // note: this doesn't append stuff for check and mate. manually do that by querying it after
+        // calling make_move()
+        [[nodiscard]] std::string standard_alg_notation(Position &pos) const;
+    };
+
+    class MoveList;
 
     class Position {
     public:
@@ -193,9 +224,12 @@ namespace sc {
         [[nodiscard]] constexpr inline Bitboard by_side(const Side c) const { return byColor[c]; }
         [[nodiscard]] constexpr inline Bitboard by_type(const Type t) const { return byType[t]; }
 
-    public:
-        int fullmoves = 1; // increment every time black moves
+        [[nodiscard]] constexpr inline const StateInfo &get_state() const { return state; }
+        [[nodiscard]] constexpr inline ColoredType piece_at(const int ind) const { return pieces[ind]; }
+        [[nodiscard]] constexpr inline bool in_check() const { return isInCheck; }
+        [[nodiscard]] constexpr Side get_turn() const { return turn; }
 
+    private:
         ColoredType pieces[BOARD_SIZE];
         Bitboard byColor[NUM_SIDES]; // black = 0 white = 1
         Bitboard byType[NUM_UNCOLORED_PIECE_TYPES];
@@ -203,35 +237,22 @@ namespace sc {
 //        std::unordered_map<uint64_t, int8_t> threefoldTable;
 
         StateInfo state;
+        int fullmoves = 1; // increment every time black moves
         Side turn = WHITE_SIDE;
         bool isInCheck = false; // this flag is set by standard_moves() if it detects that the side it generated moves for is in check.
-    };
 
-    // see https://github.com/official-stockfish/Stockfish/blob/0a318cdddf8b6bdd05c2e0ee9b3b61a031d398ed/src/types.h#L112
-    struct Move {
-        Square src : 6;
-        Square dst : 6;
-        PromoteType promote : 2;
-        MoveType typeFlags : 2;
-        int16_t ranking = 0; // used for move ordering
+        friend StateInfo antichess_make_move(Position &pos, Move mov);
+        friend void antichess_unmake_move(Position &pos, const StateInfo &info, Move mov);
+        friend StateInfo make_move(Position &pos, const Move mov);
+        friend void unmake_move(Position &pos, const StateInfo &info, const Move mov);
+        friend struct ::sc::makeimpl::PositionFriend;
 
-        inline constexpr bool operator==(const Move rhs) const {
-            return src == rhs.src && dst == rhs.dst && promote == rhs.promote && typeFlags == rhs.typeFlags;
-        }
-
-        [[nodiscard]] inline std::string long_alg_notation() const {
-            std::string ret = sq_to_str(src) + sq_to_str(dst);
-            if (typeFlags == PROMOTION) ret += (type_to_char(static_cast<Type>(promote + 2)) + ('a' - 'A'));
-            return ret;
-        }
-
-        // note: this doesn't append stuff for check and mate. manually do that by querying it after
-        // calling make_move()
-        [[nodiscard]] std::string standard_alg_notation(Position &pos) const;
+        template <Side>
+        friend void standard_moves(MoveList &ls, Position &pos);
     };
 
     template <MoveType TYPE>
-    constexpr inline Move make_move(const Square from, const Square to) { return Move{from, to, PROMOTE_QUEEN, TYPE}; }
+    constexpr inline Move make_move(const Square from, const Square to) { return Move{from, to, PROMOTE_QUEEN, TYPE, 0}; }
     constexpr inline Move make_normal(const Square from, const Square to) { return make_move<NORMAL>(from, to); }
     constexpr inline Move make_promotion(const Square from, const Square to, const PromoteType promote) {
         return Move{from, to, promote, PROMOTION, 4096 * 2}; // really high ranking: search promotions first!

@@ -14,6 +14,11 @@ namespace sc {
         STANDARD, ANTICHESS,
     };
 
+    template <bool ROOT>
+    uint64_t perft2(Position &pos, int depth);
+    extern template uint64_t perft2<true>(Position &, int);
+    extern template uint64_t perft2<false>(Position &, int);
+
     void run_perft(Position &pos, int depth);
 
     class UCI {
