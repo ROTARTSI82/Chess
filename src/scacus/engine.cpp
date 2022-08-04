@@ -2,6 +2,7 @@
 #include <algorithm>
 
 #include "scacus/bitboard.hpp"
+#include "scacus/position.hpp"
 
 #undef ENABLE_TT
 

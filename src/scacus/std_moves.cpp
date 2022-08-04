@@ -1,4 +1,5 @@
 #include "scacus/movegen.hpp"
+#include "scacus/position.hpp"
 
 #define ACCUM_MOVES(FUN, BB, LAND, LS, POS) {                   \
     Bitboard _scacus_bb = BB;                                   \
@@ -27,12 +28,12 @@ namespace sc {
         Bitboard checkers = 0; // pieces giving check directly
         {
             Bitboard it = opponent & (pos.by_type(BISHOP) | pos.by_type(QUEEN));
-            checkers |= it & lookup<BISHOP_MAGICS>(kingSq, occ);
-            while (it) attk |= lookup<BISHOP_MAGICS>(pop_lsb(it), occ ^ kingBb);
+            checkers |= it & lookup<BISHOP_TB>(kingSq, occ);
+            while (it) attk |= lookup<BISHOP_TB>(pop_lsb(it), occ ^ kingBb);
 
             it = opponent & (pos.by_type(ROOK) | pos.by_type(QUEEN));
-            checkers |= it & lookup<ROOK_MAGICS>(kingSq, occ);
-            while (it) attk |= lookup<ROOK_MAGICS>(pop_lsb(it), occ ^ kingBb);
+            checkers |= it & lookup<ROOK_TB>(kingSq, occ);
+            while (it) attk |= lookup<ROOK_TB>(pop_lsb(it), occ ^ kingBb);
 
             it = opponent & pos.by_type(KNIGHT);
             checkers |= it & knight_moves(kingSq);
@@ -60,8 +61,8 @@ namespace sc {
         Bitboard pinLines[BOARD_SIZE];
         {
             // opponent's sliders which can be pinning
-            Bitboard sliders = (lookup<BISHOP_MAGICS>(kingSq, opponent) & (pos.by_type(BISHOP) | pos.by_type(QUEEN)))
-                               | (lookup<ROOK_MAGICS>(kingSq, opponent) & (pos.by_type(ROOK) | pos.by_type(QUEEN)));
+            Bitboard sliders = (lookup<BISHOP_TB>(kingSq, opponent) & (pos.by_type(BISHOP) | pos.by_type(QUEEN)))
+                               | (lookup<ROOK_TB>(kingSq, opponent) & (pos.by_type(ROOK) | pos.by_type(QUEEN)));
             sliders &= opponent & ~checkers;
 
             while (sliders) {
@@ -94,10 +95,10 @@ namespace sc {
         Bitboard normals = self & ~pinned;
         {
             Bitboard it = normals & (pos.by_type(BISHOP) | pos.by_type(QUEEN));
-            ACCUM_MOVES(lookup<BISHOP_MAGICS>(SQ, occ), it, landing, ls, pos);
+            ACCUM_MOVES(lookup<BISHOP_TB>(SQ, occ), it, landing, ls, pos);
 
             it = normals & (pos.by_type(ROOK) | pos.by_type(QUEEN));
-            ACCUM_MOVES(lookup<ROOK_MAGICS>(SQ, occ), it, landing, ls, pos);
+            ACCUM_MOVES(lookup<ROOK_TB>(SQ, occ), it, landing, ls, pos);
 
             it = normals & pos.by_type(KNIGHT);
             ACCUM_MOVES(knight_moves(SQ), it, landing, ls, pos);
@@ -160,9 +161,9 @@ namespace sc {
                 Bitboard destinations = pinLines[sq] & landing;
 
                 if (type_of(pos.pieces[sq]) == ROOK)
-                    destinations &= pseudo_attacks<ROOK_MAGICS>(sq);
+                    destinations &= pseudo_attacks<ROOK_TB>(sq);
                 else if (type_of(pos.pieces[sq]) == BISHOP)
-                    destinations &= pseudo_attacks<BISHOP_MAGICS>(sq);
+                    destinations &= pseudo_attacks<BISHOP_TB>(sq);
 
                 while (destinations)
                     ls.push_back(make_normal(sq, pop_lsb(destinations)));
@@ -190,7 +191,7 @@ namespace sc {
 
                 // Taking en passant can be disallowed if it reveals a check to a rook or queen on the side
                 // see 8/8/8/3KPp1r/8/8/8/8 w - f6 0 1
-#define SEES_KING lookup<ROOK_MAGICS>(kingSq, occ ^ bb ^ capPawn ^ ep)
+#define SEES_KING lookup<ROOK_TB>(kingSq, occ ^ bb ^ capPawn ^ ep)
 #define TARGET_PASSED !(SEES_KING & ~checkers & opponent & \
                                        (pos.by_type(QUEEN) | pos.by_type(ROOK)))
 

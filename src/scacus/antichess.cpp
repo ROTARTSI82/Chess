@@ -1,4 +1,5 @@
 #include "scacus/antichess.hpp"
+#include "scacus/position.hpp"
 
 #include <thread>
 #include <mutex>
@@ -59,7 +60,7 @@ namespace sc {
                 add_pawn_movs_to(captures);
 
                 // TODO: Remove PAWN_MOVES table and calculate this properly
-                tmpAtk = PAWN_MOVES[SIDE][sq];
+                tmpAtk = DEPRECATED_pawn_moves(SIDE, sq);
                 if (tmpAtk & occ) tmpAtk &= ~to_bitboard(sq + 2 * (SIDE == WHITE_SIDE ? Dir::N : Dir::S)); // disallow double advance if single is blocked.
                 tmpAtk &= ~occ;
                 add_pawn_movs_to(normalMoves);
@@ -69,15 +70,15 @@ namespace sc {
                 add_attacks();
                 break;
             case QUEEN:
-                tmpAtk = (lookup<BISHOP_MAGICS>(sq, occ) | lookup<ROOK_MAGICS>(sq, occ)) & ~mySide;
+                tmpAtk = (lookup<BISHOP_TB>(sq, occ) | lookup<ROOK_TB>(sq, occ)) & ~mySide;
                 add_attacks();
                 break;
             case BISHOP:
-                tmpAtk = lookup<BISHOP_MAGICS>(sq, occ) & ~mySide;
+                tmpAtk = lookup<BISHOP_TB>(sq, occ) & ~mySide;
                 add_attacks();
                 break;
             case ROOK:
-                tmpAtk = lookup<ROOK_MAGICS>(sq, occ) & ~mySide;
+                tmpAtk = lookup<ROOK_TB>(sq, occ) & ~mySide;
                 add_attacks();
                 break;
             case KNIGHT:

@@ -22,7 +22,6 @@ int main(int, char **) {
     }
 
     if (true) {
-        sc::init_movegen();
         Position pos{};
         run_perft(pos, 6);
         return 0;

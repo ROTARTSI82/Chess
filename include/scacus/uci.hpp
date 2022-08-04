@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scacus/engine.hpp"
+#include "scacus/position.hpp"
 
 #include <thread>
 #include <condition_variable>

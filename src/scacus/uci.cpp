@@ -43,7 +43,7 @@ namespace sc {
 
     void workerFunc(UCI *uci) {
         auto start = std::chrono::high_resolution_clock::now();
-        sc::init_movegen();
+        // sc::init_movegen();
         auto duration = std::chrono::high_resolution_clock::now() - start;
         COUT << "info string Magic generation took ";
         COUT << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";

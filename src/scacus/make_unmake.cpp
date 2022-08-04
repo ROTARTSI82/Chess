@@ -1,4 +1,5 @@
 #include "scacus/movegen.hpp"
+#include "scacus/position.hpp"
 
 namespace sc::makeimpl {
     using namespace sc;
@@ -28,10 +29,10 @@ namespace sc::makeimpl {
             }
 
             if (pos->state.castlingRights & kingside) {
-                pos->state.hash ^= zob_CastlingRights[zobBase + 1];
+                pos->state.hash ^= get_zob().castlingRights[zobBase + 1];
             }
             if (pos->state.castlingRights & queenside) {
-                pos->state.hash ^= zob_CastlingRights[zobBase];
+                pos->state.hash ^= get_zob().castlingRights[zobBase];
             }
 
             pos->state.castlingRights &= ~(kingside | queenside);
@@ -57,7 +58,7 @@ namespace sc::makeimpl {
             CastlingRights mask = 1 << zobIndex;
             // if we have the right (i.e. we actually unset it), flip the hash
             if (pos->state.castlingRights & mask) {
-                pos->state.hash ^= zob_CastlingRights[zobIndex];
+                pos->state.hash ^= get_zob().castlingRights[zobIndex];
                 pos->state.castlingRights &= ~mask;
             }
         }
@@ -76,7 +77,7 @@ namespace sc {
         if (pos.pieces[mov.dst] != NULL_COLORED_TYPE) pos.state.halfmoves = 0;
 
         if (pos.state.enPassantTarget != NULL_SQUARE)
-            pos.state.hash ^= zob_EnPassantFile[file_ind_of(pos.state.enPassantTarget)];
+            pos.state.hash ^= get_zob().enPassantFile[file_ind_of(pos.state.enPassantTarget)];
 
         pos.state.enPassantTarget = NULL_SQUARE;
 
@@ -94,7 +95,7 @@ namespace sc {
                         pos.state.halfmoves = 0;
                         if (std::abs((int) mov.dst - (int) mov.src) == Dir::N * 2) {
                             pos.state.enPassantTarget = mov.dst + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
-                            pos.state.hash ^= zob_EnPassantFile[file_ind_of(pos.state.enPassantTarget)];
+                            pos.state.hash ^= get_zob().enPassantFile[file_ind_of(pos.state.enPassantTarget)];
                         }
                         break;
                     case KING:
@@ -144,7 +145,7 @@ namespace sc {
             PositionFriend::remove_castling_rights(&pos, mov.dst, side_of(pos.state.capturedPiece));
 
         pos.turn = opposite_side(pos.turn);
-        pos.state.hash ^= zob_IsWhiteTurn; // no need to reset because it is stored in state!
+        pos.state.hash ^= get_zob().isWhiteTurn; // no need to reset because it is stored in state!
         pos.isInCheck = false;
 //        pos.threefoldTable[pos.state.hash]++;
         return ret;

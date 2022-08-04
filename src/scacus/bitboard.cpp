@@ -5,6 +5,8 @@
 
 #include <array>
 
+#include "scacus/position.hpp"
+
 namespace sc {
 
     uint64_t zob_IsWhiteTurn = 0x5a35192d1f06d29aULL;
