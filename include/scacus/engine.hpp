@@ -5,47 +5,43 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <queue>
 
 #include <cstring> // memset
 #include <unordered_map>
 
 namespace sc {
 
-    struct Transposition {
-        int depth;
-        int score;
-        // int alpha, beta;
-        Move bestMove;
-    };
+    // transposition tables are global and defined in engine.cpp
 
-    class DefaultEngine {
-    public:
+    class EngineV2 {
+    private:
+        struct SearchTask {
 
-        std::thread *workers;
-        int numWorkers;
-
-        std::mutex ttMtx;
-        std::unordered_map<uint64_t, Transposition> tt; // transposition table
-        int ttHits = 0;
-
-        std::mutex mtx;
-        std::atomic_int runningAlpha;
+        };
 
         Position *pos;
-        int history[NUM_SIDES][BOARD_SIZE][BOARD_SIZE]; // [side_to_move][square_from][square_to]
-        Move bestMove;
-        double evaluation;
-        bool continueSearch = true;
 
-        Move worstMove;
-        double worstEval;
+        std::vector<std::thread> workers;
+        std::queue<SearchTask> tasks;
 
-        DefaultEngine() {
-            memset(history, 0, sizeof(history));
-        }
+    public:
+        EngineV2() = default;
 
         void start_search(int maxDepth = 99);
         void stop_search();
-        void order_moves(MoveList &list, Move best = Move{});
+
+        inline void set_pos(Position *p) {
+            pos = p;
+        }
+
+        [[nodiscard]] inline Move best_move() const {
+            return Move{};
+        }
+
+        // can be an estimate. Search is optimized for best
+        [[nodiscard]] inline Move worst_move() const {
+            return Move{};
+        }
     };
 }

@@ -187,7 +187,8 @@ namespace sc {
 
         [[nodiscard]] inline std::string long_alg_notation() const {
             std::string ret = sq_to_str(src) + sq_to_str(dst);
-            if (typeFlags == PROMOTION) ret += (type_to_char(static_cast<Type>(promote + 2)) + ('a' - 'A'));
+            if (typeFlags == PROMOTION)
+                ret += static_cast<char>(type_to_char(static_cast<Type>(promote + 2)) + ('a' - 'A'));
             return ret;
         }
 
@@ -247,7 +248,7 @@ namespace sc {
         friend void unmake_move(Position &pos, const StateInfo &info, const Move mov);
         friend struct ::sc::makeimpl::PositionFriend;
 
-        template <Side>
+        template <Side, bool>
         friend void standard_moves(MoveList &ls, Position &pos);
     };
 

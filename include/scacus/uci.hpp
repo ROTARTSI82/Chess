@@ -59,6 +59,6 @@ namespace sc {
 
         Variant variant = Variant::STANDARD;
 
-        DefaultEngine eng{};
+        EngineV2 eng{};
     };
 }

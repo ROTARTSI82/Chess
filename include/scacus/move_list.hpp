@@ -5,7 +5,7 @@
 namespace sc {
     class MoveList {
     public:
-        Move data[4096];
+        Move data[256];
         Move *head = nullptr;
         Move *tail = nullptr;
 

@@ -108,9 +108,9 @@ namespace sc {
 
     inline constexpr void legal_moves_from(MoveList &ls, Position &pos) {
         if (pos.get_turn() == WHITE_SIDE)
-            standard_moves<WHITE_SIDE>(ls, pos);
+            standard_moves<WHITE_SIDE, false>(ls, pos);
         else
-            standard_moves<BLACK_SIDE>(ls, pos);
+            standard_moves<BLACK_SIDE, false>(ls, pos);
     }
 
     inline MoveList legal_moves_from(Position &pos) {

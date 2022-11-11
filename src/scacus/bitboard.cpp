@@ -54,6 +54,7 @@ namespace sc {
         }
     }
 
+    // TO IMPROVE
     [[nodiscard]] std::string Move::standard_alg_notation(Position &pos) const {
         // doesn't include en passant
         const bool isCapture = to_bitboard(dst) & (pos.by_side(WHITE_SIDE) | pos.by_side(BLACK_SIDE));
@@ -92,6 +93,7 @@ namespace sc {
         set_state_from_fen(fen);
     }
 
+    // TO IMPROVE
     void Position::set_state_from_fen(const std::string &fen, int *store) {
         state.hash = 0x927b1a7aed74a025ULL;
         for (int i = 0; i < BOARD_SIZE; i++) pieces[i] = NULL_COLORED_TYPE;

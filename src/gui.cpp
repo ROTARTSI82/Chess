@@ -16,12 +16,12 @@ using namespace sc;
 
 
 int main(int, char **) {
-    if (false) {
+    if (true) {
         sc::UCI().run();
         return 0;
     }
 
-    if (true) {
+    if (false) {
         sc::init_movegen();
         Position pos{};
         run_perft(pos, 6);
@@ -45,15 +45,14 @@ int main(int, char **) {
     std::string pgn;
     int turnNum = 1;
     auto add_and_make = [&](Move mov) {
-        if (pos.turn == WHITE_SIDE) pgn += std::to_string(turnNum++) + ". ";
+        if (pos.get_turn() == WHITE_SIDE) pgn += std::to_string(turnNum++) + ". ";
         pgn += mov.standard_alg_notation(pos);
 
-        StateInfo ret;
-        make_move(pos, mov, &ret);
+        StateInfo ret = make_move(pos, mov);
 
         auto numLegals = legal_moves_from(pos).size();
-        if (numLegals == 0 && pos.isInCheck) pgn += "#";
-        else if (pos.isInCheck) pgn += "+";
+        if (numLegals == 0 && pos.in_check()) pgn += "#";
+        else if (pos.in_check()) pgn += "+";
         pgn += " ";
 
         return ret;
@@ -96,8 +95,8 @@ int main(int, char **) {
     sc::MoveList legalMoves(0);
 
     sc::Bitboard drawBb = 0;
-    sc::DefaultEngine eng;
-    eng.pos = &pos;
+    sc::EngineV2 eng;
+    eng.set_pos(&pos);
 
     // annimation loop
     while (running) {
@@ -109,11 +108,11 @@ int main(int, char **) {
             break;
         }
 
-        eng.start_search(64);
-        std::this_thread::sleep_for(std::chrono::seconds(8));
-        eng.stop_search();
-        undoCaps.push_back(add_and_make(eng.bestMove));
-        undoMoves.push_back(eng.bestMove);
+//        eng.start_search(64);
+//        std::this_thread::sleep_for(std::chrono::seconds(8));
+//        eng.stop_search();
+//        undoCaps.push_back(add_and_make(eng.bestMove));
+//        undoMoves.push_back(eng.bestMove);
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -140,7 +139,7 @@ int main(int, char **) {
                         }
                     }
 
-                    if (!found || (sc::to_bitboard(prev) & pos.by_side(sc::opposite_side(pos.turn)))) {
+                    if (!found || (sc::to_bitboard(prev) & pos.by_side(sc::opposite_side(pos.get_turn())))) {
                         legalMoves.clear();
                         break;
                     }
@@ -155,8 +154,8 @@ int main(int, char **) {
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                 } else {
                     legalMoves.clear();
-                    if (pos.turn == WHITE_SIDE) sc::standard_moves<WHITE_SIDE>(legalMoves, pos);
-                    else sc::standard_moves<BLACK_SIDE>(legalMoves, pos);
+                    if (pos.get_turn() == WHITE_SIDE) sc::standard_moves<WHITE_SIDE, false>(legalMoves, pos);
+                    else sc::standard_moves<BLACK_SIDE, false>(legalMoves, pos);
                 }
 
                 break;
@@ -167,13 +166,13 @@ int main(int, char **) {
                 } else switch (event.key.keysym.sym) {
                 case SDLK_f:
                     std::cout << pos.get_fen() << std::endl;
-                    std::cout << "zob: " << pos.state.hash << std::endl;
+                    std::cout << "zob: " << pos.get_state().hash << std::endl;
                     break;
                 case SDLK_b:
                     drawBb = pos.by_type(BISHOP);
                     break;
                 case SDLK_t:
-                    drawBb = pos.by_side(pos.turn);
+                    drawBb = pos.by_side(pos.get_turn());
                     break;
                 case SDLK_n:
                     drawBb = pos.by_type(KNIGHT);
@@ -200,8 +199,8 @@ int main(int, char **) {
                     eng.start_search(64);
                     std::this_thread::sleep_for(std::chrono::seconds(2));
                     eng.stop_search();
-                    undoCaps.push_back(add_and_make(eng.bestMove));
-                    undoMoves.push_back(eng.bestMove);
+                    undoCaps.push_back(add_and_make(eng.best_move()));
+                    undoMoves.push_back(eng.best_move());
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;
                 }
@@ -210,8 +209,8 @@ int main(int, char **) {
                     eng.start_search(64);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                     eng.stop_search();
-                    undoCaps.push_back(add_and_make(eng.worstMove));
-                    undoMoves.push_back(eng.worstMove);
+                    undoCaps.push_back(add_and_make(eng.worst_move()));
+                    undoMoves.push_back(eng.worst_move());
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;
                 }
@@ -238,7 +237,7 @@ int main(int, char **) {
         for (sc::Square sq = 0; sq < 64; sq++) {
             drawArea.x = sc::file_ind_of(sq) * w / 8;
             drawArea.y = (7-sc::rank_ind_of(sq)) * h / 8;
-            SDL_RenderCopy(rend, font[(int) pos.pieces[sq]], nullptr, &drawArea);
+            SDL_RenderCopy(rend, font[(int) pos.piece_at(sq)], nullptr, &drawArea);
         }
 
         for (sc::Square sq = 0; sq < 64; sq++) {

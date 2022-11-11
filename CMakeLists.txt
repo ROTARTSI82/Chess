@@ -33,12 +33,14 @@ elseif()
 endif()
 
 
+set(USE_DBG false)
 if (USE_DBG)
     message("-- !! Debug symbols enabled!!")
     add_compile_options(-g3 -glldb -fno-omit-frame-pointer)
     add_link_options(-g3 -glldb -fno-omit-frame-pointer)
 endif()
 
+set(USE_ASAN false)
 if (USE_ASAN)
     add_compile_options(-fsanitize=address)
     add_link_options(-fsanitize=address)

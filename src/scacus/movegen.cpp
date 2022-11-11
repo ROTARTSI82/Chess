@@ -36,13 +36,13 @@ namespace sc {
     static void init_zobrist() {
         uint64_t seed = 0xe4e35f44eb8290d1ULL;
         for (int i = 0; i < 8; i++)
-        zob_EnPassantFile[i] = rand_u64(seed);
+            zob_EnPassantFile[i] = rand_u64(seed);
         for (int i = 0; i < 4; i++)
-        zob_CastlingRights[i] = rand_u64(seed);
+            zob_CastlingRights[i] = rand_u64(seed);
 
         for (int i = 0; i < BOARD_SIZE; i++)
-        for (int j = 0; j < NUM_COLORED_PIECE_TYPES; j++)
-        zob_Pieces[i][j] = rand_u64(seed);
+            for (int j = 0; j < NUM_COLORED_PIECE_TYPES; j++)
+                zob_Pieces[i][j] = rand_u64(seed);
     }
 
     // this code doesn't have to be efficient as it's only run once at startup

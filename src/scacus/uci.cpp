@@ -48,7 +48,7 @@ namespace sc {
         COUT << "info string Magic generation took ";
         COUT << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";
 
-        uci->eng.pos = &uci->pos;
+        uci->eng.set_pos(&uci->pos);
         uci->eng.start_search();
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         uci->eng.stop_search();
@@ -182,9 +182,9 @@ namespace sc {
                 COUT << "bestmove " << out << '\n';
             } else {
                 eng.start_search(64);
-                std::this_thread::sleep_for(std::chrono::seconds(2));
+                std::this_thread::sleep_for(std::chrono::seconds(8));
                 eng.stop_search();
-                COUT << "bestmove " << eng.bestMove.long_alg_notation() << std::endl;
+                COUT << "bestmove " << eng.best_move().long_alg_notation() << std::endl;
             }
         } else if (line == "quit") {
             running = false;

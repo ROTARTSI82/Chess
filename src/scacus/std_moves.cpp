@@ -1,5 +1,6 @@
 #include "scacus/movegen.hpp"
 
+// this is some cryptic macro usage that probably isn't ideal
 #define ACCUM_MOVES(FUN, BB, LAND, LS, POS) {                   \
     Bitboard _scacus_bb = BB;                                   \
     while (_scacus_bb) {                                        \
@@ -12,7 +13,42 @@
 
 namespace sc {
 
-    template <Side SIDE>
+    /**
+     * Calculate the pieces on the board that are currently pinned
+     * @param pos Chess position
+     * @param pinnable Candidates for pieces which might be pinned
+     * @param blocking Pieces that can block a pin (i.e. opponent's own pieces breaking the pin)
+     * @param pinnerCandidates Pieces that are candidates to be pinning something
+     * @param kingSq King square, or the square to which pieces are being binned
+     * @param pinLines Array of 64 Bitboards to store the lines pieces are pinned to into.
+     * @return Pieces that are pinned
+     */
+    [[nodiscard]] static inline Bitboard calc_pinned(Position &pos, Bitboard pinnable, Bitboard blocking,
+                                                     Bitboard pinnerCandidates, Square kingSq, Bitboard *pinLines) {
+        Bitboard pinned = 0;
+        {
+            // opponent's sliders which can be pinning
+            Bitboard sliders = (lookup<BISHOP_MAGICS>(kingSq, blocking) & (pos.by_type(BISHOP) | pos.by_type(QUEEN)))
+                               | (lookup<ROOK_MAGICS>(kingSq, blocking) & (pos.by_type(ROOK) | pos.by_type(QUEEN)));
+            sliders &= pinnerCandidates;
+
+            while (sliders) {
+                Square sq = pop_lsb(sliders);
+                Bitboard pinLine = pin_line(kingSq, sq);
+                Bitboard mine = pinnable & pinLine;
+
+                if (mine && (mine & (mine - 1)) == 0) {
+                    // `mine` has exactly 1 bit set, the piece is pinned!
+                    pinned |= mine;
+                    pinLines[get_lsb(mine)] = pinLine;
+                }
+            }
+        }
+
+        return pinned;
+    }
+
+    template <Side SIDE, bool QUIESC>
     void standard_moves(MoveList &ls, Position &pos) {
         pos.isInCheck = false;
 
@@ -22,6 +58,7 @@ namespace sc {
 
         const Bitboard kingBb = self & pos.by_type(KING);
         const Square kingSq = get_lsb(kingBb);
+        const Square opponentKing = get_lsb(opponent & pos.by_type(KING));
 
         Bitboard attk = 0; // bitboard being attacked by the opposite side
         Bitboard checkers = 0; // pieces giving check directly
@@ -56,29 +93,21 @@ namespace sc {
             return;
         }
 
-        Bitboard pinned = 0;
-        Bitboard pinLines[BOARD_SIZE];
-        {
-            // opponent's sliders which can be pinning
-            Bitboard sliders = (lookup<BISHOP_MAGICS>(kingSq, opponent) & (pos.by_type(BISHOP) | pos.by_type(QUEEN)))
-                               | (lookup<ROOK_MAGICS>(kingSq, opponent) & (pos.by_type(ROOK) | pos.by_type(QUEEN)));
-            sliders &= opponent & ~checkers;
+        // pieces that are pinned
+        Bitboard pinLines[64];
+        Bitboard pinned = calc_pinned(pos, self, opponent, opponent & ~checkers, kingSq, pinLines);
 
-            while (sliders) {
-                Square sq = pop_lsb(sliders);
-                Bitboard pinLine = pin_line(kingSq, sq);
-                Bitboard mine = self & pinLine;
-
-                if (mine && (mine & (mine - 1)) == 0) {
-                    // `mine` has exactly 1 bit set, the piece is pinned!
-                    pinned |= mine;
-                    pinLines[get_lsb(mine)] = pinLine;
-                }
-            }
+        Bitboard discoveryLines[64];
+        Bitboard discoveredChecks = 0;
+        if (QUIESC) {
+            for (Bitboard &discoveryLine : discoveryLines)
+                discoveryLine = 0;
+            discoveredChecks = calc_pinned(pos, self, occ, self, opponentKing, discoveryLines);
         }
 
         pos.isInCheck = false;
-        Bitboard landing = ~self;  // squares we are allowed to land on
+        Bitboard landing = ~self; // squares we are allowed to land on
+        if (QUIESC) landing &= occ; // only search for captures or checks
         if (checkers) {
             pos.isInCheck = true;
 
@@ -91,18 +120,29 @@ namespace sc {
             landing &= pin_line(kingSq, sq);
         }
 
+        // discovered checks is only set for quiescence, which handle them specially
         Bitboard normals = self & ~pinned;
+        if (QUIESC) normals &= ~discoveredChecks;
         {
+            // note: in quiescence searches only look for moves giving check
             Bitboard it = normals & (pos.by_type(BISHOP) | pos.by_type(QUEEN));
-            ACCUM_MOVES(lookup<BISHOP_MAGICS>(SQ, occ), it, landing, ls, pos);
+            ACCUM_MOVES(lookup<BISHOP_MAGICS>(SQ, occ), it,
+                        landing | (QUIESC ? lookup<BISHOP_MAGICS>(opponentKing, occ) : 0ULL), ls, pos);
 
             it = normals & (pos.by_type(ROOK) | pos.by_type(QUEEN));
-            ACCUM_MOVES(lookup<ROOK_MAGICS>(SQ, occ), it, landing, ls, pos);
+            ACCUM_MOVES(lookup<ROOK_MAGICS>(SQ, occ), it,
+                        landing | (QUIESC ? lookup<ROOK_MAGICS>(opponentKing, occ) : 0ULL), ls, pos);
 
             it = normals & pos.by_type(KNIGHT);
-            ACCUM_MOVES(knight_moves(SQ), it, landing, ls, pos);
+            ACCUM_MOVES(knight_moves(SQ), it,
+                        landing | (QUIESC ? knight_moves(opponentKing) : 0ULL), ls, pos);
 
             it = king_moves(kingSq) & ~attk & ~self;
+
+            // allow king to either capture or create discovered check
+            if (QUIESC)
+                it &= (kingBb & discoveredChecks) != 0 ? (~discoveryLines[kingSq] | occ) : occ;
+
             while (it)
                 ls.push_back(make_normal(kingSq, pop_lsb(it)));
 
@@ -121,6 +161,12 @@ namespace sc {
                 canKingside = canKingside && !(checkMaskKingside & attk) && !(occMaskKingside & occ);
                 canQueenside = canQueenside && !(checkMaskQueenside & attk) && !(occMaskQueenside & occ);
 
+                if (QUIESC) {
+                    // only allow castling if it gives check. pin_line includes the second square but not the first.
+                    canKingside &= ((occ & pin_line(opponentKing, kingSq + Dir::E)) != 0);
+                    canQueenside &= ((occ & pin_line(opponentKing, kingSq + Dir::W)) != 0);
+                }
+
                 if (canKingside)
                     ls.push_back(make_move<CASTLE>(kingSq, kingSq + 2 * Dir::E));
                 if (canQueenside)
@@ -136,14 +182,19 @@ namespace sc {
                 if (pinned & to_bitboard(SQ)) // restrict movement of pinned pieces
                     destinations &= pinLines[SQ];
 
+                // in quiescence search, limit to discovered checks and captures
+                if (QUIESC)
+                    destinations &= (to_bitboard(SQ) & discoveredChecks) != 0 ? (~discoveryLines[SQ] | occ) : occ;
+
                 Bitboard promotions = destinations & (rank_bb(8) | rank_bb(1));
-                while (promotions) {
+                while (promotions) { // always look at promotions
                     Square dst = pop_lsb(promotions);
+                    // bishop and rook desirable for stalemate tricks
                     for (PromoteType to: {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK})
                         ls.push_back(make_promotion(SQ, dst, to));
                 }
 
-                destinations &= ~(rank_bb(8) | rank_bb(1));
+                destinations &= ~(rank_bb(8) | rank_bb(1)); // these are promotion squares
                 while (destinations)
                     ls.push_back(make_normal(SQ, pop_lsb(destinations)));
             }
@@ -167,10 +218,14 @@ namespace sc {
                 while (destinations)
                     ls.push_back(make_normal(sq, pop_lsb(destinations)));
             }
-
         }
 
-        // en passant
+        // special handling of discovered checks
+        if (QUIESC) {
+            // TODO
+        }
+
+        // en passant: always allowed even in quiescence
         if (pos.state.enPassantTarget != NULL_SQUARE) {
             Bitboard it = self & pos.by_type(PAWN) & pawn_attacks<opposite_side(SIDE)>(pos.state.enPassantTarget);
             Bitboard ep = to_bitboard(pos.state.enPassantTarget);
@@ -183,16 +238,16 @@ namespace sc {
                                                      + (SIDE == BLACK_SIDE ? Dir::N : Dir::S));
 
                 // if we are pinned, we need to land on the pin line
-#define PIN_PASSED !(bb & pinned) || (ep & pinLines[sq])
+                const bool PIN_PASSED = !(bb & pinned) || (ep & pinLines[sq]);
 
                 // if we are in check, we need to capture the checker or land between the king & checker (landings)
-#define CHECK_PASSED !checkers || (ep & landing) || (capPawn & checkers)
+                const bool CHECK_PASSED = !checkers || (ep & landing) || (capPawn & checkers);
 
                 // Taking en passant can be disallowed if it reveals a check to a rook or queen on the side
                 // see 8/8/8/3KPp1r/8/8/8/8 w - f6 0 1
-#define SEES_KING lookup<ROOK_MAGICS>(kingSq, occ ^ bb ^ capPawn ^ ep)
-#define TARGET_PASSED !(SEES_KING & ~checkers & opponent & \
-                                       (pos.by_type(QUEEN) | pos.by_type(ROOK)))
+                const Bitboard SEES_KING = lookup<ROOK_MAGICS>(kingSq, occ ^ bb ^ capPawn ^ ep);
+                const bool TARGET_PASSED = !(SEES_KING & ~checkers & opponent &
+                        (pos.by_type(QUEEN) | pos.by_type(ROOK)));
 
                 if ((PIN_PASSED) && (CHECK_PASSED) && (TARGET_PASSED))
                     ls.push_back(make_move<EN_PASSANT>(sq, pos.get_state().enPassantTarget));
@@ -200,7 +255,10 @@ namespace sc {
         }
     }
 
-    template void standard_moves<BLACK_SIDE>(MoveList &, Position &);
-    template void standard_moves<WHITE_SIDE>(MoveList &, Position &);
+    template void standard_moves<BLACK_SIDE, false>(MoveList &, Position &);
+    template void standard_moves<WHITE_SIDE, false>(MoveList &, Position &);
+
+    template void standard_moves<BLACK_SIDE, true>(MoveList &, Position &);
+    template void standard_moves<WHITE_SIDE, true>(MoveList &, Position &);
 
 }
