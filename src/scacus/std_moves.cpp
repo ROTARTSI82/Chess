@@ -35,7 +35,10 @@ namespace sc {
             while (sliders) {
                 Square sq = pop_lsb(sliders);
                 Bitboard pinLine = pin_line(kingSq, sq);
-                Bitboard mine = pinnable & pinLine;
+
+                // we remove sq when testing for the case when sq appears in both pinnerCandidates and pinnable
+                // we only want to check for `pinnable` pieces appearing between the two squares, exclusive.
+                Bitboard mine = pinnable & (pinLine & ~to_bitboard(sq));
 
                 if (mine && (mine & (mine - 1)) == 0) {
                     // `mine` has exactly 1 bit set, the piece is pinned!
@@ -102,7 +105,7 @@ namespace sc {
         if (QUIESC) {
             for (Bitboard &discoveryLine : discoveryLines)
                 discoveryLine = 0;
-            discoveredChecks = calc_pinned(pos, self, occ, self, opponentKing, discoveryLines);
+            discoveredChecks = calc_pinned(pos, self, 0ULL, self, opponentKing, discoveryLines);
         }
 
         pos.isInCheck = false;
