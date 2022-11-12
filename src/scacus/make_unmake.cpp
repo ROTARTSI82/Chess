@@ -27,14 +27,14 @@ namespace sc::makeimpl {
                 zobBase = 2;
             }
 
-            if (pos->state.castlingRights & kingside) {
-                pos->state.hash ^= zob_CastlingRights[zobBase + 1];
+            if (pos->state->castlingRights & kingside) {
+                pos->state->hash ^= zob_CastlingRights[zobBase + 1];
             }
-            if (pos->state.castlingRights & queenside) {
-                pos->state.hash ^= zob_CastlingRights[zobBase];
+            if (pos->state->castlingRights & queenside) {
+                pos->state->hash ^= zob_CastlingRights[zobBase];
             }
 
-            pos->state.castlingRights &= ~(kingside | queenside);
+            pos->state->castlingRights &= ~(kingside | queenside);
         }
 
         inline static constexpr void remove_castling_rights(Position *pos, const Square rookSq, Side side) {
@@ -56,9 +56,9 @@ namespace sc::makeimpl {
 
             CastlingRights mask = 1 << zobIndex;
             // if we have the right (i.e. we actually unset it), flip the hash
-            if (pos->state.castlingRights & mask) {
-                pos->state.hash ^= zob_CastlingRights[zobIndex];
-                pos->state.castlingRights &= ~mask;
+            if (pos->state->castlingRights & mask) {
+                pos->state->hash ^= zob_CastlingRights[zobIndex];
+                pos->state->castlingRights &= ~mask;
             }
         }
     };
@@ -67,22 +67,24 @@ namespace sc::makeimpl {
 namespace sc {
     using namespace makeimpl;
 
-    StateInfo make_move(Position &pos, const Move mov) {
-        StateInfo ret = pos.state;
+    StateInfo *make_move(Position &pos, const Move mov) {
+        // make a copy of the current state
+        // the current state will be updated into oblivion.
+        StateInfo *ret = new StateInfo{*pos.state};
 
         if (pos.turn == BLACK_SIDE) pos.fullmoves++;
-        pos.state.halfmoves++;
+        pos.state->halfmoves++;
 
-        if (pos.pieces[mov.dst] != NULL_COLORED_TYPE) pos.state.halfmoves = 0;
+        if (pos.pieces[mov.dst] != NULL_COLORED_TYPE) pos.state->halfmoves = 0;
 
-        if (pos.state.enPassantTarget != NULL_SQUARE)
-            pos.state.hash ^= zob_EnPassantFile[file_ind_of(pos.state.enPassantTarget)];
+        if (pos.state->enPassantTarget != NULL_SQUARE)
+            pos.state->hash ^= zob_EnPassantFile[file_ind_of(pos.state->enPassantTarget)];
 
-        pos.state.enPassantTarget = NULL_SQUARE;
+        pos.state->enPassantTarget = NULL_SQUARE;
 
         switch (mov.typeFlags) {
             case NORMAL: {
-                pos.state.capturedPiece = pos.pieces[mov.dst];
+                pos.state->capturedPiece = pos.pieces[mov.dst];
 
                 Type movedType = type_of(pos.pieces[mov.src]);
                 pos.clear(mov.dst);
@@ -91,10 +93,10 @@ namespace sc {
 
                 switch (movedType) {
                     case PAWN:
-                        pos.state.halfmoves = 0;
+                        pos.state->halfmoves = 0;
                         if (std::abs((int) mov.dst - (int) mov.src) == Dir::N * 2) {
-                            pos.state.enPassantTarget = mov.dst + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
-                            pos.state.hash ^= zob_EnPassantFile[file_ind_of(pos.state.enPassantTarget)];
+                            pos.state->enPassantTarget = mov.dst + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+                            pos.state->hash ^= zob_EnPassantFile[file_ind_of(pos.state->enPassantTarget)];
                         }
                         break;
                     case KING:
@@ -123,15 +125,15 @@ namespace sc {
             }
             case EN_PASSANT: {
                 // use enPassantTarget from ret: pos.state.enPassant target has already been set to null.
-                Square capturedPawn = ret.enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
-                pos.state.capturedPiece = pos.pieces[capturedPawn];
+                Square capturedPawn = ret->enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+                pos.state->capturedPiece = pos.pieces[capturedPawn];
                 pos.clear(capturedPawn);
                 pos.clear(mov.src);
                 pos.set(mov.dst, PAWN, pos.turn);
                 break;
             }
             case PROMOTION:
-                pos.state.capturedPiece = pos.pieces[mov.dst];
+                pos.state->capturedPiece = pos.pieces[mov.dst];
                 pos.clear(mov.dst);
                 pos.clear(mov.src);
                 pos.set(mov.dst, static_cast<Type>((int) mov.promote + 2), pos.turn);
@@ -140,17 +142,40 @@ namespace sc {
                 UNDEFINED();
         }
 
-        if (type_of(pos.state.capturedPiece) == ROOK)
-            PositionFriend::remove_castling_rights(&pos, mov.dst, side_of(pos.state.capturedPiece));
+        if (type_of(pos.state->capturedPiece) == ROOK)
+            PositionFriend::remove_castling_rights(&pos, mov.dst, side_of(pos.state->capturedPiece));
 
         pos.turn = opposite_side(pos.turn);
-        pos.state.hash ^= zob_IsWhiteTurn; // no need to reset because it is stored in state!
+        pos.state->hash ^= zob_IsWhiteTurn; // no need to reset because it is stored in state!
         pos.isInCheck = false;
-//        pos.threefoldTable[pos.state.hash]++;
+
+        pos.state->prev = ret;
+
+        // advance by two each time because we can't match something on the turn of the opponent
+        StateInfo *it = ret->prev;
+        
+        // we expect halfmoves to decrease on each step we take back.
+        // if it doesn't, then state was irreversibly changed 
+        // so no repetition was possible before that point.
+        auto halfmoves = pos.state->halfmoves;
+
+        while (it != nullptr) {
+            if (it->hash == pos.state->hash) {
+                pos.state->reps = it->reps + 1;
+                break;
+            }
+
+            if (halfmoves <= it->halfmoves)
+                break; // no repetition possible
+
+            halfmoves = it->halfmoves;
+            it = it->prev ? it->prev->prev : nullptr;
+        }
+
         return ret;
     }
 
-    void unmake_move(Position &pos, const StateInfo &info, const Move mov) {
+    void unmake_move(Position &pos, StateInfo *info, const Move mov) {
 //        pos.threefoldTable[pos.state.hash]--;
 
         pos.turn = opposite_side(pos.turn);
@@ -160,17 +185,17 @@ namespace sc {
             case NORMAL:
                 pos.set(mov.src, type_of(pos.pieces[mov.dst]), pos.turn);
                 pos.clear(mov.dst);
-                if (pos.state.capturedPiece != NULL_COLORED_TYPE)
-                    pos.set(mov.dst, type_of(pos.state.capturedPiece), side_of(pos.state.capturedPiece));
+                if (pos.state->capturedPiece != NULL_COLORED_TYPE)
+                    pos.set(mov.dst, type_of(pos.state->capturedPiece), side_of(pos.state->capturedPiece));
                 break;
             case PROMOTION:
                 pos.set(mov.src, PAWN, pos.turn);
                 pos.clear(mov.dst);
-                if (pos.state.capturedPiece != NULL_COLORED_TYPE)
-                    pos.set(mov.dst, type_of(pos.state.capturedPiece), side_of(pos.state.capturedPiece));
+                if (pos.state->capturedPiece != NULL_COLORED_TYPE)
+                    pos.set(mov.dst, type_of(pos.state->capturedPiece), side_of(pos.state->capturedPiece));
                 break;
             case EN_PASSANT: {
-                Square captureSq = info.enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+                Square captureSq = info->enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
                 pos.set(captureSq, PAWN, opposite_side(pos.turn));
                 pos.clear(mov.dst);
                 pos.set(mov.src, PAWN, pos.turn);
@@ -190,6 +215,7 @@ namespace sc {
                 UNDEFINED();
         }
 
+        delete pos.state;
         pos.state = info; // resets the hash too!
         pos.isInCheck = false;
     }

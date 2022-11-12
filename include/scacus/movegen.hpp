@@ -12,26 +12,6 @@ namespace sc {
     extern Bitboard KING_MOVES[BOARD_SIZE];
     extern Bitboard PIN_LINE[BOARD_SIZE][BOARD_SIZE];
 
-    /* struct MovegenInfo {
-        MovegenInfo();
-
-        Bitboard KNIGHT_MOVES[BOARD_SIZE];
-        Bitboard PAWN_ATTACKS[NUM_SIDES][BOARD_SIZE];
-        Bitboard PAWN_MOVES[NUM_SIDES][BOARD_SIZE];
-        Bitboard KING_MOVES[BOARD_SIZE];
-        Bitboard PIN_LINE[BOARD_SIZE][BOARD_SIZE];
-
-        static inline constexpr const MovegenInfo &get() {
-            static MovegenInfo val{};
-            return val;
-        }
-    }; */
-
-
-    inline constexpr Bitboard pawn_attacks_old(Side side, Square sq) {
-        return PAWN_ATTACKS[side][sq];
-    }
-
     template <Side SIDE>
     inline constexpr Bitboard pawn_attacks(Square sq) {
         return PAWN_ATTACKS[SIDE][sq];
@@ -103,8 +83,9 @@ namespace sc {
     extern template void standard_moves<BLACK_SIDE>(MoveList &, Position &);
     extern template void standard_moves<WHITE_SIDE>(MoveList &, Position &);
 
-    StateInfo make_move(Position &pos, const Move mov);
-    void unmake_move(Position &pos, const StateInfo &info, const Move mov);
+    // DESIGN TODO: returning a StateInfo * is no longer necessary because of the prev field in StateInfo
+    StateInfo *make_move(Position &pos, const Move mov);
+    void unmake_move(Position &pos, StateInfo *info, const Move mov);
 
     inline constexpr void legal_moves_from(MoveList &ls, Position &pos) {
         if (pos.get_turn() == WHITE_SIDE)

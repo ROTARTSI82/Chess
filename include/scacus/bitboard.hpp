@@ -75,13 +75,13 @@ namespace sc {
 
     void print_bb(const Bitboard b);
 
-    inline constexpr Square make_square(char file, uint8_t rank) { return (rank - 1) * 8 + file - 'a'; }
+    inline constexpr Square new_square(char file, uint8_t rank) { return (rank - 1) * 8 + file - 'a'; }
     inline std::string sq_to_str(const Square s) {
         return std::string{static_cast<char>('a' + s % 8), static_cast<char>('1' + s / 8)};
     }
 
     inline constexpr Bitboard to_bitboard(const Square s) { return 1ULL << s; }
-    inline constexpr Bitboard bb_rank_file(char file, int rank) { return to_bitboard(make_square(file, rank)); }
+    inline constexpr Bitboard bb_rank_file(char file, int rank) { return to_bitboard(new_square(file, rank)); }
 
     enum Type : uint_fast8_t {
         NULL_TYPE = 0,
@@ -108,7 +108,7 @@ namespace sc {
 
     inline constexpr Side opposite_side(const Side s) { return static_cast<Side>((uint8_t) s ^ 1); }
 
-    inline constexpr ColoredType make_ColoredType(const Type t, const Side s) {
+    inline constexpr ColoredType new_ColoredType(const Type t, const Side s) {
         return static_cast<ColoredType>((int) t | (s == WHITE_SIDE ? 8 : 0));
     }
 
@@ -155,6 +155,7 @@ namespace sc {
 
     // info about a position that we would like to store separately for move undo
     struct StateInfo {
+        StateInfo *prev = nullptr; // history of game states is kept in a linked list.
         uint64_t hash = 0x927b1a7aed74a025ULL;
         int halfmoves = 0; // number of plies since a capture or pawn advance
 
@@ -162,8 +163,7 @@ namespace sc {
         Square enPassantTarget = NULL_SQUARE;
         ColoredType capturedPiece = NULL_COLORED_TYPE;
 
-//        Bitboard checkLines[NUM_SIDES];
-//        Bitboard pinLines[NUM_SIDES];
+        uint8_t reps = 0;
     };
 
     extern uint64_t zob_IsWhiteTurn;
@@ -199,6 +199,7 @@ namespace sc {
 
     class MoveList;
 
+    // TODO: Deepcopy the linked list that is in state
     class Position {
     public:
         explicit Position(const std::string &fen);
@@ -209,14 +210,14 @@ namespace sc {
         void set_state_from_fen(const std::string &fen, int *store = nullptr);
 
         constexpr inline void set(const Square p, const Type type, const Side side) {
-            pieces[p] = make_ColoredType(type, side);
+            pieces[p] = new_ColoredType(type, side);
             byType[type] |= to_bitboard(p);
             byColor[side] |= to_bitboard(p);
-            state.hash ^= zob_Pieces[p][pieces[p]];
+            state->hash ^= zob_Pieces[p][pieces[p]];
         }
 
         constexpr inline void clear(const Square p) {
-            state.hash ^= zob_Pieces[p][pieces[p]];
+            state->hash ^= zob_Pieces[p][pieces[p]];
             byType[type_of(pieces[p])] &= ~to_bitboard(p); 
             byColor[side_of(pieces[p])] &= ~to_bitboard(p);
             pieces[p] = NULL_COLORED_TYPE;
@@ -225,7 +226,7 @@ namespace sc {
         [[nodiscard]] constexpr inline Bitboard by_side(const Side c) const { return byColor[c]; }
         [[nodiscard]] constexpr inline Bitboard by_type(const Type t) const { return byType[t]; }
 
-        [[nodiscard]] constexpr inline const StateInfo &get_state() const { return state; }
+        [[nodiscard]] constexpr inline const StateInfo *get_state() const { return state; }
         [[nodiscard]] constexpr inline ColoredType piece_at(const int ind) const { return pieces[ind]; }
         [[nodiscard]] constexpr inline bool in_check() const { return isInCheck; }
         [[nodiscard]] constexpr Side get_turn() const { return turn; }
@@ -237,15 +238,15 @@ namespace sc {
 
 //        std::unordered_map<uint64_t, int8_t> threefoldTable;
 
-        StateInfo state;
+        StateInfo *state = nullptr;
         int fullmoves = 1; // increment every time black moves
         Side turn = WHITE_SIDE;
+
+        // TODO: Currently this flag is reset back to false by any unmake_move() so.... it really should be a part of the state info
         bool isInCheck = false; // this flag is set by standard_moves() if it detects that the side it generated moves for is in check.
 
-        friend StateInfo antichess_make_move(Position &pos, Move mov);
-        friend void antichess_unmake_move(Position &pos, const StateInfo &info, Move mov);
-        friend StateInfo make_move(Position &pos, const Move mov);
-        friend void unmake_move(Position &pos, const StateInfo &info, const Move mov);
+        friend StateInfo *make_move(Position &pos, const Move mov);
+        friend void unmake_move(Position &pos, StateInfo *info, const Move mov);
         friend struct ::sc::makeimpl::PositionFriend;
 
         template <Side, bool>
@@ -253,9 +254,9 @@ namespace sc {
     };
 
     template <MoveType TYPE>
-    constexpr inline Move make_move(const Square from, const Square to) { return Move{from, to, PROMOTE_QUEEN, TYPE, 0}; }
-    constexpr inline Move make_normal(const Square from, const Square to) { return make_move<NORMAL>(from, to); }
-    constexpr inline Move make_promotion(const Square from, const Square to, const PromoteType promote) {
+    constexpr inline Move new_move(const Square from, const Square to) { return Move{from, to, PROMOTE_QUEEN, TYPE, 0}; }
+    constexpr inline Move new_move_normal(const Square from, const Square to) { return new_move<NORMAL>(from, to); }
+    constexpr inline Move new_promotion(const Square from, const Square to, const PromoteType promote) {
         return Move{from, to, promote, PROMOTION, 4096 * 2}; // really high ranking: search promotions first!
     }
 

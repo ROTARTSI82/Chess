@@ -6,8 +6,6 @@
 
 #include <fstream>
 
-#include "scacus/antichess.hpp"
-
 namespace sc {
 
 #define COUT std::cout
@@ -21,7 +19,7 @@ namespace sc {
         for (const auto &m : legals) {
 
             if (!ROOT || depth > 1) {
-                StateInfo undo = sc::make_move(pos, m);
+                auto undo = sc::make_move(pos, m);
                 if (leaf_coneybear)
                     ret += (res = legal_moves_from(pos).size());
                 else
@@ -102,9 +100,11 @@ namespace sc {
 
         if (tok == "moves") {
             while (!stream.eof()) {
+                std::cout << "HASH\t" << pos.get_state()->hash << '\n';
+
                 stream >> tok;
 
-                Move mov;
+                Move mov{};
                 mov.typeFlags = NORMAL;
                 mov.promote = PROMOTE_QUEEN;
 
@@ -116,19 +116,20 @@ namespace sc {
                     mov.promote = static_cast<PromoteType>((int) type_from_char(last) - 2);
                 }
 
-                mov.src = make_square(tok.at(0), tok.at(1) - '0');
-                mov.dst = make_square(tok.at(2), tok.at(3) - '0');
+                mov.src = new_square(tok.at(0), tok.at(1) - '0');
+                mov.dst = new_square(tok.at(2), tok.at(3) - '0');
 
                 if ((pos.by_type(KING) & to_bitboard(mov.src)) && std::abs(mov.dst - mov.src) == 2)
                     mov.typeFlags = CASTLE;
 
-                if (pos.get_state().enPassantTarget == mov.dst)
+                if (pos.get_state()->enPassantTarget == mov.dst)
                     mov.typeFlags = EN_PASSANT;
-
-                if (variant == Variant::ANTICHESS)
-                    sc::antichess_make_move(pos, mov);
                 else
                     sc::make_move(pos, mov);
+
+                if (pos.get_state()->reps > 0) {
+                    std::cout << "REPETITION DETECTED\n";
+                }
             }
         }
     }
@@ -174,22 +175,23 @@ namespace sc {
             run_perft(pos, num);
         } else if (line.rfind("go", 0) == 0) {
             // go = true;
-            // mainToWorker.notify_all();
-            if (variant == Variant::ANTICHESS) {
-                Move mov = antichess_search(pos, 8).first;
-                std::string out = mov.long_alg_notation();
-                if (mov.typeFlags == CASTLE) out += 'k';
-                COUT << "bestmove " << out << '\n';
-            } else {
-                eng.start_search(64);
-                std::this_thread::sleep_for(std::chrono::seconds(8));
-                eng.stop_search();
-                COUT << "bestmove " << eng.best_move().long_alg_notation() << std::endl;
-            }
+            eng.start_search(64);
+            std::this_thread::sleep_for(std::chrono::seconds(8));
+            eng.stop_search();
+            COUT << "bestmove " << eng.best_move().long_alg_notation() << std::endl;
         } else if (line == "quit") {
             running = false;
         } else if (line == "d") {
             dbg_dump_position(pos);
+        } else if (line == "c") {
+            // dumps the hash chain
+            const StateInfo *it = pos.get_state();
+            while (it != nullptr) {
+                std::cout << it->hash << '\t';
+                it = it->prev;
+            }
+
+            std::cout << '\n';
         } else {
             COUT << "info string Unknown command: " << line << std::endl;
         }

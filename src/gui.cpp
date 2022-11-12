@@ -124,10 +124,10 @@ int main(int, char **) {
                 sc::Square prev = selected;
                 isSelected ^= true;
 
-                selected = sc::make_square('a' + event.button.x * 8 / w, 8 - event.button.y * 8 / h);
+                selected = sc::new_square('a' + event.button.x * 8 / w, 8 - event.button.y * 8 / h);
 
                 if (!isSelected) { // make the move
-                    sc::Move prototype = sc::make_normal(prev, selected);
+                    sc::Move prototype = sc::new_move_normal(prev, selected);
                     sc::Move mov;
                     bool found = false;
                     for (const auto m : legalMoves) {

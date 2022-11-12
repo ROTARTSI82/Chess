@@ -1,14 +1,14 @@
 #include "scacus/movegen.hpp"
 
 // this is some cryptic macro usage that probably isn't ideal
-#define ACCUM_MOVES(FUN, BB, LAND, LS, POS) {                   \
-    Bitboard _scacus_bb = BB;                                   \
-    while (_scacus_bb) {                                        \
-        Square SQ = pop_lsb(_scacus_bb);                        \
-        Bitboard _scacus_it = (FUN) & (LAND);                   \
-        while (_scacus_it)                                      \
-            LS.push_back(make_normal(SQ, pop_lsb(_scacus_it))); \
-    }                                                           \
+#define ACCUM_MOVES(FUN, BB, LAND, LS, POS) {                       \
+    Bitboard _scacus_bb = BB;                                       \
+    while (_scacus_bb) {                                            \
+        Square SQ = pop_lsb(_scacus_bb);                            \
+        Bitboard _scacus_it = (FUN) & (LAND);                       \
+        while (_scacus_it)                                          \
+            LS.push_back(new_move_normal(SQ, pop_lsb(_scacus_it))); \
+    }                                                               \
 }
 
 namespace sc {
@@ -90,7 +90,7 @@ namespace sc {
             // we MUST move the king to a safe square
             Bitboard it = king_moves(kingSq) & ~self & ~attk;
             while (it)
-                ls.push_back(make_normal(kingSq, pop_lsb(it)));
+                ls.push_back(new_move_normal(kingSq, pop_lsb(it)));
 
             pos.isInCheck = true;
             return;
@@ -147,13 +147,13 @@ namespace sc {
                 it &= (kingBb & discoveredChecks) != 0 ? (~discoveryLines[kingSq] | occ) : occ;
 
             while (it)
-                ls.push_back(make_normal(kingSq, pop_lsb(it)));
+                ls.push_back(new_move_normal(kingSq, pop_lsb(it)));
 
             // castling
             if (!checkers) {
                 constexpr auto sideIndex = (SIDE == WHITE_SIDE ? 2 : 0);
-                bool canKingside = pos.state.castlingRights & KINGSIDE_MASK << sideIndex;
-                bool canQueenside = pos.state.castlingRights & QUEENSIDE_MASK << sideIndex;
+                bool canKingside = pos.state->castlingRights & KINGSIDE_MASK << sideIndex;
+                bool canQueenside = pos.state->castlingRights & QUEENSIDE_MASK << sideIndex;
 
                 constexpr Bitboard checkMaskQueenside = CASTLING_ATTACK_MASKS[0 + sideIndex];
                 constexpr Bitboard checkMaskKingside = CASTLING_ATTACK_MASKS[1 + sideIndex];
@@ -171,9 +171,9 @@ namespace sc {
                 }
 
                 if (canKingside)
-                    ls.push_back(make_move<CASTLE>(kingSq, kingSq + 2 * Dir::E));
+                    ls.push_back(new_move<CASTLE>(kingSq, kingSq + 2 * Dir::E));
                 if (canQueenside)
-                    ls.push_back(make_move<CASTLE>(kingSq, kingSq + 2 * Dir::W));
+                    ls.push_back(new_move<CASTLE>(kingSq, kingSq + 2 * Dir::W));
             }
 
             // pawns
@@ -194,12 +194,12 @@ namespace sc {
                     Square dst = pop_lsb(promotions);
                     // bishop and rook desirable for stalemate tricks
                     for (PromoteType to: {PROMOTE_QUEEN, PROMOTE_BISHOP, PROMOTE_KNIGHT, PROMOTE_ROOK})
-                        ls.push_back(make_promotion(SQ, dst, to));
+                        ls.push_back(new_promotion(SQ, dst, to));
                 }
 
                 destinations &= ~(rank_bb(8) | rank_bb(1)); // these are promotion squares
                 while (destinations)
-                    ls.push_back(make_normal(SQ, pop_lsb(destinations)));
+                    ls.push_back(new_move_normal(SQ, pop_lsb(destinations)));
             }
         }
 
@@ -219,7 +219,7 @@ namespace sc {
                     destinations &= pseudo_attacks<BISHOP_MAGICS>(sq);
 
                 while (destinations)
-                    ls.push_back(make_normal(sq, pop_lsb(destinations)));
+                    ls.push_back(new_move_normal(sq, pop_lsb(destinations)));
             }
         }
 
@@ -229,15 +229,15 @@ namespace sc {
         }
 
         // en passant: always allowed even in quiescence
-        if (pos.state.enPassantTarget != NULL_SQUARE) {
-            Bitboard it = self & pos.by_type(PAWN) & pawn_attacks<opposite_side(SIDE)>(pos.state.enPassantTarget);
-            Bitboard ep = to_bitboard(pos.state.enPassantTarget);
+        if (pos.state->enPassantTarget != NULL_SQUARE) {
+            Bitboard it = self & pos.by_type(PAWN) & pawn_attacks<opposite_side(SIDE)>(pos.state->enPassantTarget);
+            Bitboard ep = to_bitboard(pos.state->enPassantTarget);
 
             while (it) {
                 const Square sq = pop_lsb(it);
                 const Bitboard bb = to_bitboard(sq);
 
-                const Bitboard capPawn = to_bitboard(pos.state.enPassantTarget
+                const Bitboard capPawn = to_bitboard(pos.state->enPassantTarget
                                                      + (SIDE == BLACK_SIDE ? Dir::N : Dir::S));
 
                 // if we are pinned, we need to land on the pin line
@@ -253,7 +253,7 @@ namespace sc {
                         (pos.by_type(QUEEN) | pos.by_type(ROOK)));
 
                 if ((PIN_PASSED) && (CHECK_PASSED) && (TARGET_PASSED))
-                    ls.push_back(make_move<EN_PASSANT>(sq, pos.get_state().enPassantTarget));
+                    ls.push_back(new_move<EN_PASSANT>(sq, pos.get_state()->enPassantTarget));
             }
         }
     }
