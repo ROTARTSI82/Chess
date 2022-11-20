@@ -29,6 +29,7 @@ namespace sc {
         UCI()
         // : worker{workerFunc, this}
         {
+            dbg_dump_position(pos);
             running = false;
             workerFunc(this);
         }
@@ -52,7 +53,7 @@ namespace sc {
 //        std::condition_variable mainToWorker;
 //        std::condition_variable workerToMain;
         
-        Position pos;
+        Position pos{};
         bool running = true;
         bool readyok = false;
         bool go = false;

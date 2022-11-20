@@ -67,7 +67,7 @@ namespace sc::makeimpl {
 namespace sc {
     using namespace makeimpl;
 
-    StateInfo *make_move(Position &pos, const Move mov) {
+    void make_move(Position &pos, const Move mov) {
         // make a copy of the current state
         // the current state will be updated into oblivion.
         StateInfo *ret = new StateInfo{*pos.state};
@@ -171,11 +171,9 @@ namespace sc {
             halfmoves = it->halfmoves;
             it = it->prev ? it->prev->prev : nullptr;
         }
-
-        return ret;
     }
 
-    void unmake_move(Position &pos, StateInfo *info, const Move mov) {
+    void unmake_move(Position &pos, const Move mov) {
 //        pos.threefoldTable[pos.state.hash]--;
 
         pos.turn = opposite_side(pos.turn);
@@ -195,7 +193,7 @@ namespace sc {
                     pos.set(mov.dst, type_of(pos.state->capturedPiece), side_of(pos.state->capturedPiece));
                 break;
             case EN_PASSANT: {
-                Square captureSq = info->enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
+                Square captureSq = pos.state->prev->enPassantTarget + (pos.turn == WHITE_SIDE ? Dir::S : Dir::N);
                 pos.set(captureSq, PAWN, opposite_side(pos.turn));
                 pos.clear(mov.dst);
                 pos.set(mov.src, PAWN, pos.turn);
@@ -215,8 +213,10 @@ namespace sc {
                 UNDEFINED();
         }
 
-        delete pos.state;
-        pos.state = info; // resets the hash too!
         pos.isInCheck = false;
+
+        StateInfo *toDelete = pos.state;
+        pos.state = pos.state->prev; // resets the hash too!
+        delete toDelete;
     }
 }

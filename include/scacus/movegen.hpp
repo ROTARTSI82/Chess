@@ -78,25 +78,29 @@ namespace sc {
 
     void init_movegen();
 
-    template <Side SIDE>
+    template <Side SIDE, bool QUIESC>
     void standard_moves(MoveList &ls, Position &pos);
-    extern template void standard_moves<BLACK_SIDE>(MoveList &, Position &);
-    extern template void standard_moves<WHITE_SIDE>(MoveList &, Position &);
+    extern template void standard_moves<BLACK_SIDE, false>(MoveList &, Position &);
+    extern template void standard_moves<WHITE_SIDE, false>(MoveList &, Position &);
+    extern template void standard_moves<BLACK_SIDE, true>(MoveList &, Position &);
+    extern template void standard_moves<WHITE_SIDE, true>(MoveList &, Position &);
 
     // DESIGN TODO: returning a StateInfo * is no longer necessary because of the prev field in StateInfo
-    StateInfo *make_move(Position &pos, const Move mov);
-    void unmake_move(Position &pos, StateInfo *info, const Move mov);
+    void make_move(Position &pos, const Move mov);
+    void unmake_move(Position &pos, const Move mov);
 
+    template <bool QUIESC>
     inline constexpr void legal_moves_from(MoveList &ls, Position &pos) {
         if (pos.get_turn() == WHITE_SIDE)
-            standard_moves<WHITE_SIDE, false>(ls, pos);
+            standard_moves<WHITE_SIDE, QUIESC>(ls, pos);
         else
-            standard_moves<BLACK_SIDE, false>(ls, pos);
+            standard_moves<BLACK_SIDE, QUIESC>(ls, pos);
     }
 
+    template <bool QUIESC>
     inline MoveList legal_moves_from(Position &pos) {
         MoveList legals(0);
-        legal_moves_from(legals, pos);
+        legal_moves_from<QUIESC>(legals, pos);
         return legals;
     }
 }

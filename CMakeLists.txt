@@ -33,7 +33,7 @@ elseif()
 endif()
 
 
-set(USE_DBG false)
+set(USE_DBG true)
 if (USE_DBG)
     message("-- !! Debug symbols enabled!!")
     add_compile_options(-g3 -glldb -fno-omit-frame-pointer)

@@ -48,14 +48,12 @@ int main(int, char **) {
         if (pos.get_turn() == WHITE_SIDE) pgn += std::to_string(turnNum++) + ". ";
         pgn += mov.standard_alg_notation(pos);
 
-        StateInfo ret = make_move(pos, mov);
+        make_move(pos, mov);
 
-        auto numLegals = legal_moves_from(pos).size();
+        auto numLegals = legal_moves_from<false>(pos).size();
         if (numLegals == 0 && pos.in_check()) pgn += "#";
         else if (pos.in_check()) pgn += "+";
         pgn += " ";
-
-        return ret;
     };
 
     SDL_Window* win = SDL_CreateWindow("Chess", // creates a window
@@ -103,7 +101,7 @@ int main(int, char **) {
         int w, h;
         SDL_GetWindowSize(win, &w, &h);
 
-        if (legal_moves_from(pos).empty()) {
+        if (legal_moves_from<false>(pos).empty()) {
             running = false;
             break;
         }
@@ -144,7 +142,7 @@ int main(int, char **) {
                         break;
                     }
 
-                    undoCaps.push_back(add_and_make(mov));
+                    add_and_make(mov);
                     undoMoves.push_back(mov);
                     legalMoves.clear();
 
@@ -166,7 +164,7 @@ int main(int, char **) {
                 } else switch (event.key.keysym.sym) {
                 case SDLK_f:
                     std::cout << pos.get_fen() << std::endl;
-                    std::cout << "zob: " << pos.get_state().hash << std::endl;
+                    std::cout << "zob: " << pos.get_state()->hash << std::endl;
                     break;
                 case SDLK_b:
                     drawBb = pos.by_type(BISHOP);
@@ -190,7 +188,7 @@ int main(int, char **) {
                     drawBb = 0; break;
                 case SDLK_BACKSPACE:
                     if (undoMoves.empty()) break;
-                    sc::unmake_move(pos, undoCaps.back(), undoMoves.back());
+                    sc::unmake_move(pos, undoMoves.back());
                     undoCaps.pop_back(); undoMoves.pop_back();
                     // turn ^= true;
                     break;
@@ -199,7 +197,7 @@ int main(int, char **) {
                     eng.start_search(64);
                     std::this_thread::sleep_for(std::chrono::seconds(2));
                     eng.stop_search();
-                    undoCaps.push_back(add_and_make(eng.best_move()));
+                    add_and_make(eng.best_move());
                     undoMoves.push_back(eng.best_move());
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;
@@ -209,7 +207,7 @@ int main(int, char **) {
                     eng.start_search(64);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                     eng.stop_search();
-                    undoCaps.push_back(add_and_make(eng.worst_move()));
+                    add_and_make(eng.worst_move());
                     undoMoves.push_back(eng.worst_move());
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                     break;

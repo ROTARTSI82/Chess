@@ -12,19 +12,19 @@ namespace sc {
 
     template <bool ROOT>
     uint64_t perft2(Position &pos, int depth) {
-        sc::MoveList legals = legal_moves_from(pos);
+        sc::MoveList legals = legal_moves_from<false>(pos);
         uint64_t ret = 0, res = 0;
         const bool leaf_coneybear = (depth == 2);
 
         for (const auto &m : legals) {
 
             if (!ROOT || depth > 1) {
-                auto undo = sc::make_move(pos, m);
+                sc::make_move(pos, m);
                 if (leaf_coneybear)
-                    ret += (res = legal_moves_from(pos).size());
+                    ret += (res = legal_moves_from<false>(pos).size());
                 else
                     ret += (res = perft2<false>(pos, depth - 1));
-                sc::unmake_move(pos, undo, m);
+                sc::unmake_move(pos, m);
             } else {
                 res = 1;
                 ret++;
@@ -46,10 +46,12 @@ namespace sc {
         COUT << "info string Magic generation took ";
         COUT << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";
 
+        uci->pos.set_state_from_fen(STARTING_POS_FEN);
         uci->eng.set_pos(&uci->pos);
-        uci->eng.start_search();
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        uci->eng.stop_search();
+        // uci->eng.start_search();
+        // std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        // uci->eng.stop_search();
+
         // first search is buggy for some reason. hacky fix
 
         uci->readyok = true;
@@ -175,8 +177,8 @@ namespace sc {
             run_perft(pos, num);
         } else if (line.rfind("go", 0) == 0) {
             // go = true;
-            eng.start_search(64);
-            std::this_thread::sleep_for(std::chrono::seconds(8));
+            eng.start_search(6);
+            // std::this_thread::sleep_for(std::chrono::seconds(8));
             eng.stop_search();
             COUT << "bestmove " << eng.best_move().long_alg_notation() << std::endl;
         } else if (line == "quit") {

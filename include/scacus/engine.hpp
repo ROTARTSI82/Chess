@@ -25,6 +25,8 @@ namespace sc {
         std::vector<std::thread> workers;
         std::queue<SearchTask> tasks;
 
+        Move best_mov;
+
     public:
         EngineV2() = default;
 
@@ -36,7 +38,7 @@ namespace sc {
         }
 
         [[nodiscard]] inline Move best_move() const {
-            return Move{};
+            return best_mov;
         }
 
         // can be an estimate. Search is optimized for best

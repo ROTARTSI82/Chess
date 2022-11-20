@@ -206,6 +206,9 @@ namespace sc {
         Position() : Position(std::string{STARTING_POS_FEN}) {};
         [[nodiscard]] std::string get_fen() const;
 
+        Position(const Position &) = delete;
+        Position &operator=(const Position &) = delete;
+
         // store: Used to store the index into the string that we read to
         void set_state_from_fen(const std::string &fen, int *store = nullptr);
 
@@ -245,8 +248,8 @@ namespace sc {
         // TODO: Currently this flag is reset back to false by any unmake_move() so.... it really should be a part of the state info
         bool isInCheck = false; // this flag is set by standard_moves() if it detects that the side it generated moves for is in check.
 
-        friend StateInfo *make_move(Position &pos, const Move mov);
-        friend void unmake_move(Position &pos, StateInfo *info, const Move mov);
+        friend void make_move(Position &pos, const Move mov);
+        friend void unmake_move(Position &pos, const Move mov);
         friend struct ::sc::makeimpl::PositionFriend;
 
         template <Side, bool>

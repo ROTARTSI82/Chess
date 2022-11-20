@@ -14,10 +14,12 @@ namespace {
     struct Transposition {
         ScoreT score = 0;
         DepthT depth = 0;
-        sc::Move bestMove{};
+//        sc::Move bestMove{};
+        bool isFull; // if false, it's a quiesc search
     };
 
-    Transposition transTable[4096 * 4096] = {{}};
+    constexpr auto TABLE_SIZE = 4096 * 4096;
+    Transposition transTable[TABLE_SIZE] = {{}};
 }
 
 namespace sc {
@@ -54,33 +56,49 @@ namespace sc {
 
     class SearchThread {
     private:
-        Position &pos;
+        Position *pos;
         DepthT startDepth;
 
     public:
 
+        SearchThread(Position *p, DepthT d) : pos(p), startDepth(d) {}
+
         template <bool QUIESC>
         inline ScoreT search(ScoreT alpha, ScoreT beta, DepthT depth) {
-            MoveList ls = legal_moves_from(pos);
+            MoveList ls = legal_moves_from<QUIESC>(*pos);
 
             if (depth <= 0)
-                return eval_material(pos);
+                // return eval_material(*pos);
+                return QUIESC ? eval_material(*pos) : search<true>(alpha, beta, 20);
 
             if (ls.empty())
-                return pos.in_check() ? MATE_SCORE + (startDepth - depth) * MATE_STEP : 0;
-            if (pos.get_state()->halfmoves >= 50) return 0;
+                return pos->in_check() ? MATE_SCORE + (startDepth - depth) * MATE_STEP : 0;
+            if (pos->get_state()->halfmoves >= 50 || pos->get_state()->reps) return 0;
 
-            ScoreT value = MIN_SCORE; // todo: 3-fold rep
+            auto &tt = transTable[pos->get_state()->hash % TABLE_SIZE];
+            // either the tt is in a higher mode OR (higher depth and same mode)
+            if ((QUIESC && tt.isFull) || (tt.depth > depth && (QUIESC ^ tt.isFull)))
+                return tt.score;
+
+            ScoreT value = MIN_SCORE;
             for (const auto &mov: ls) {
-                auto undo = make_move(pos, mov);
+                make_move(*pos, mov);
 
                 value = std::max(-search<QUIESC>(-beta, -alpha, depth - 1), value);
                 alpha = std::max(value, alpha);
+
+                unmake_move(*pos, mov);
+
                 if (value >= beta) {
                     return value;
                 }
+            }
 
-                unmake_move(pos, undo, mov);
+            // either we are in a higher mode OR we have higher depth in the same mode
+            if ((!QUIESC && !tt.isFull) || (depth > tt.depth && (QUIESC ^ tt.isFull))) {
+                tt.depth = depth;
+                tt.isFull = !QUIESC;
+                tt.score = value;
             }
 
             return value;
@@ -89,7 +107,27 @@ namespace sc {
 
 
     void EngineV2::start_search(int maxDepth) {
+        // return;
+        maxDepth = 6;
+        SearchThread me{pos, static_cast<DepthT>(maxDepth)};
+        MoveList ls = legal_moves_from<false>(*pos);
 
+        ScoreT best = MIN_SCORE;
+        for (const auto &mov : ls) {
+            make_move(*pos, mov);
+            const auto score = -me.search<false>(MIN_SCORE, MAX_SCORE, maxDepth - 1);
+
+            std::cout << "info string mov " << mov.long_alg_notation() << " score " << (double) score / PAWN_SCORE << '\n';
+            
+            if (score > best) {
+                best = score;
+                best_mov = mov;
+            }
+
+            unmake_move(*pos, mov);
+        }
+
+        std::cout << "info string eval " << (double) best / PAWN_SCORE << '\n';
     }
 
     void EngineV2::stop_search() {
