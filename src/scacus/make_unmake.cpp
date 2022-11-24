@@ -150,6 +150,7 @@ namespace sc {
         pos.isInCheck = false;
 
         pos.state->prev = ret;
+        pos.state->prevMove = mov;
 
         // advance by two each time because we can't match something on the turn of the opponent
         StateInfo *it = ret->prev;

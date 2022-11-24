@@ -55,7 +55,7 @@ namespace sc {
     }
 
     // TO IMPROVE
-    [[nodiscard]] std::string Move::standard_alg_notation(Position &pos) const {
+    [[nodiscard]] std::string Move::standard_alg_notation(const Position &pos) const {
         // doesn't include en passant
         const bool isCapture = to_bitboard(dst) & (pos.by_side(WHITE_SIDE) | pos.by_side(BLACK_SIDE));
         const bool isPawn = to_bitboard(src) & pos.by_type(PAWN);
@@ -243,5 +243,24 @@ namespace sc {
         print_bb(pos.by_type(BISHOP));
         std::cout << "\n\nROOKS:\n";
         print_bb(pos.by_type(ROOK));
+
+        const StateInfo *it = pos.get_state();
+        std::vector<Move> movs;
+        while (it) {
+            movs.push_back(it->prevMove);
+            it = it->prev;
+        }
+
+        std::cout << "MOVES\n";
+        int num = 1;
+        // for (int i = movs.size() - 1; i >= 0; i--) {
+        //     std::cout << num++ << ". " << movs.at(i).standard_alg_notation(pos) << ' ';
+        // }
+
+        std::cout << '\n';
+        for (int i = movs.size() - 1; i >= 0; i--) {
+            std::cout << movs.at(i).long_alg_notation() << '\t';
+        }
+        std::cout << '\n';
     }
 }

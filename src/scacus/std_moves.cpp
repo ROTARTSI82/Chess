@@ -63,6 +63,10 @@ namespace sc {
         const Square kingSq = get_lsb(kingBb);
         const Square opponentKing = get_lsb(opponent & pos.by_type(KING));
 
+        if (QUIESC && (kingBb == 0 || (opponent & pos.by_type(KING)) == 0)) {
+            dbg_dump_position(pos);
+        }
+
         Bitboard attk = 0; // bitboard being attacked by the opposite side
         Bitboard checkers = 0; // pieces giving check directly
         {
@@ -100,9 +104,10 @@ namespace sc {
         Bitboard pinLines[64];
         Bitboard pinned = calc_pinned(pos, self, opponent, opponent & ~checkers, kingSq, pinLines);
 
+        const bool DO_QUIESC = QUIESC && !checkers;
         Bitboard discoveryLines[64];
         Bitboard discoveredChecks = 0;
-        if (QUIESC) {
+        if (DO_QUIESC) {
             for (Bitboard &discoveryLine : discoveryLines)
                 discoveryLine = 0;
             discoveredChecks = calc_pinned(pos, self, 0ULL, self, opponentKing, discoveryLines);
@@ -110,7 +115,6 @@ namespace sc {
 
         pos.isInCheck = false;
         Bitboard landing = ~self; // squares we are allowed to land on
-        if (QUIESC) landing &= occ; // only search for captures or checks
         if (checkers) {
             pos.isInCheck = true;
 
@@ -125,26 +129,27 @@ namespace sc {
 
         // discovered checks is only set for quiescence, which handle them specially
         Bitboard normals = self & ~pinned;
-        if (QUIESC) normals &= ~discoveredChecks;
+        if (DO_QUIESC) normals &= ~discoveredChecks;
         {
-            // note: in quiescence searches only look for moves giving check
+            // note: in quiescence searches only look for moves giving check or capturing a piece
             Bitboard it = normals & (pos.by_type(BISHOP) | pos.by_type(QUEEN));
-            ACCUM_MOVES(lookup<BISHOP_MAGICS>(SQ, occ), it,
-                        landing | (QUIESC ? lookup<BISHOP_MAGICS>(opponentKing, occ) : 0ULL), ls, pos);
+            Bitboard quiescTerm = DO_QUIESC ? occ | lookup<BISHOP_MAGICS>(opponentKing, occ) : ~0ULL;
+            ACCUM_MOVES(lookup<BISHOP_MAGICS>(SQ, occ), it, landing & quiescTerm, ls, pos);
 
             it = normals & (pos.by_type(ROOK) | pos.by_type(QUEEN));
-            ACCUM_MOVES(lookup<ROOK_MAGICS>(SQ, occ), it,
-                        landing | (QUIESC ? lookup<ROOK_MAGICS>(opponentKing, occ) : 0ULL), ls, pos);
+            quiescTerm = DO_QUIESC ? occ | lookup<ROOK_MAGICS>(opponentKing, occ) : ~0ULL;
+            ACCUM_MOVES(lookup<ROOK_MAGICS>(SQ, occ), it, landing & quiescTerm, ls, pos);
 
             it = normals & pos.by_type(KNIGHT);
-            ACCUM_MOVES(knight_moves(SQ), it,
-                        landing | (QUIESC ? knight_moves(opponentKing) : 0ULL), ls, pos);
+            quiescTerm = DO_QUIESC ? occ | knight_moves(opponentKing) : ~0ULL;
+            ACCUM_MOVES(knight_moves(SQ), it, landing & quiescTerm, ls, pos);
 
+            // king movement
             it = king_moves(kingSq) & ~attk & ~self;
 
             // allow king to either capture or create discovered check
-            if (QUIESC)
-                it &= (kingBb & discoveredChecks) != 0 ? (~discoveryLines[kingSq] | occ) : occ;
+            if (DO_QUIESC)
+                it &= occ | ((kingBb & discoveredChecks) != 0 ? ~discoveryLines[kingSq] : 0ULL);
 
             while (it)
                 ls.push_back(new_move_normal(kingSq, pop_lsb(it)));
@@ -164,10 +169,10 @@ namespace sc {
                 canKingside = canKingside && !(checkMaskKingside & attk) && !(occMaskKingside & occ);
                 canQueenside = canQueenside && !(checkMaskQueenside & attk) && !(occMaskQueenside & occ);
 
-                if (QUIESC) {
+                if (DO_QUIESC) {
                     // only allow castling if it gives check. pin_line includes the second square but not the first.
-                    canKingside &= ((occ & pin_line(opponentKing, kingSq + Dir::E)) != 0);
-                    canQueenside &= ((occ & pin_line(opponentKing, kingSq + Dir::W)) != 0);
+                    canKingside = canKingside && ((occ & pin_line(opponentKing, kingSq + Dir::E)) != 0);
+                    canQueenside = canQueenside && ((occ & pin_line(opponentKing, kingSq + Dir::W)) != 0);
                 }
 
                 if (canKingside)
@@ -186,8 +191,11 @@ namespace sc {
                     destinations &= pinLines[SQ];
 
                 // in quiescence search, limit to discovered checks and captures
-                if (QUIESC)
-                    destinations &= (to_bitboard(SQ) & discoveredChecks) != 0 ? (~discoveryLines[SQ] | occ) : occ;
+                if (DO_QUIESC) {
+                    Bitboard checkSqs = pawn_attacks<opposite_side(SIDE)>(opponentKing);
+                    Bitboard discoveryTerm = ((to_bitboard(SQ) & discoveredChecks) != 0 ? ~discoveryLines[SQ] : 0ULL);
+                    destinations &= checkSqs | occ | discoveryTerm;
+                }
 
                 Bitboard promotions = destinations & (rank_bb(8) | rank_bb(1));
                 while (promotions) { // always look at promotions
@@ -217,6 +225,20 @@ namespace sc {
                     destinations &= pseudo_attacks<ROOK_MAGICS>(sq);
                 else if (type_of(pos.pieces[sq]) == BISHOP)
                     destinations &= pseudo_attacks<BISHOP_MAGICS>(sq);
+                
+                if (DO_QUIESC) {
+                    Bitboard quiescAllowed = (to_bitboard(sq) & discoveredChecks) != 0 ? ~discoveryLines[sq] : 0ULL;
+                    quiescAllowed |= occ;
+                    
+                    // TODO: These moves are probably bad, so do we even bother searching for them???
+                    Type type = type_of(pos.pieces[sq]);
+                    if (type == ROOK || type == QUEEN)
+                        quiescAllowed |= pseudo_attacks<ROOK_MAGICS>(opponentKing);
+                    if (type == BISHOP || type == QUEEN)
+                        quiescAllowed |= pseudo_attacks<BISHOP_MAGICS>(opponentKing);
+                    
+                    destinations &= quiescAllowed;
+                }
 
                 while (destinations)
                     ls.push_back(new_move_normal(sq, pop_lsb(destinations)));
@@ -224,8 +246,12 @@ namespace sc {
         }
 
         // special handling of discovered checks
-        if (QUIESC) {
-            // TODO
+        if (DO_QUIESC) {
+            // kings, pawns, and pinned pieces are handled already seperately.
+            discoveredChecks &= pos.by_type(BISHOP) | pos.by_type(QUEEN) | pos.by_type(ROOK) | pos.by_type(KNIGHT);
+            discoveredChecks &= ~pinned;
+
+            // todo;
         }
 
         // en passant: always allowed even in quiescence

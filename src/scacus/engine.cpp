@@ -12,10 +12,11 @@ namespace {
     };
 
     struct Transposition {
+        uint64_t hash = 0;
         ScoreT score = 0;
         DepthT depth = 0;
 //        sc::Move bestMove{};
-        bool isFull; // if false, it's a quiesc search
+        bool isQuiesc = true; // if false, it's a quiesc search
     };
 
     constexpr auto TABLE_SIZE = 4096 * 4096;
@@ -50,35 +51,71 @@ namespace sc {
                 + (popcnt(me & pawns) - popcnt(them & pawns)) * 100;
     }
 
-    inline static ScoreT eval(Position &pos) {
-        return eval_material(pos);
+    inline static unsigned tt_strength(DepthT depth, bool quiesc) {
+        return (quiesc ? 16 : 256) + depth;
     }
 
     class SearchThread {
     private:
         Position *pos;
         DepthT startDepth;
+        uint64_t ttHits = 0;
 
     public:
 
+        inline uint64_t getTTHits() const {
+            return ttHits;
+        }
+
         SearchThread(Position *p, DepthT d) : pos(p), startDepth(d) {}
+
+        inline ScoreT mateScore(DepthT depth) {
+            return pos->in_check() ? MATE_SCORE + (startDepth - depth) * MATE_STEP : 0;
+        }
+
+        inline ScoreT eval(DepthT depth) {
+            // need to double check if it's mate! TODO: we don't need to full list of legal
+            // moves, so you can implement a more efficient way to check this
+            MoveList ls = legal_moves_from<false>(*pos);
+            if (ls.empty())
+                return mateScore(depth);
+
+            MoveList opp(0);
+            if (pos->get_turn() == WHITE_SIDE)
+                standard_moves<BLACK_SIDE, false>(opp, *pos);
+            else
+                standard_moves<WHITE_SIDE, false>(opp, *pos);
+
+            return eval_material(*pos) + (ls.size() - opp.size());
+        }
 
         template <bool QUIESC>
         inline ScoreT search(ScoreT alpha, ScoreT beta, DepthT depth) {
-            MoveList ls = legal_moves_from<QUIESC>(*pos);
-
-            if (depth <= 0)
-                // return eval_material(*pos);
-                return QUIESC ? eval_material(*pos) : search<true>(alpha, beta, 20);
-
-            if (ls.empty())
-                return pos->in_check() ? MATE_SCORE + (startDepth - depth) * MATE_STEP : 0;
-            if (pos->get_state()->halfmoves >= 50 || pos->get_state()->reps) return 0;
-
             auto &tt = transTable[pos->get_state()->hash % TABLE_SIZE];
             // either the tt is in a higher mode OR (higher depth and same mode)
-            if ((QUIESC && tt.isFull) || (tt.depth > depth && (QUIESC ^ tt.isFull)))
+            if (tt.hash == pos->get_state()->hash && tt_strength(depth, QUIESC) <= tt_strength(tt.depth, tt.isQuiesc)) {
+                ttHits++;
                 return tt.score;
+            }
+            
+            MoveList ls = legal_moves_from<QUIESC>(*pos);
+
+            const bool canForceDraw = pos->get_state()->halfmoves >= 50 || pos->get_state()->reps;
+
+            if (QUIESC) {
+                ScoreT ev = canForceDraw ? 0 : eval(depth);
+                if (ev > beta || ls.empty() || depth <= 0) // depth limit is bad but whatever
+                    return ev;
+                alpha = std::max(alpha, ev);
+            } else {
+                if (depth <= 0)
+                    return search<true>(alpha, beta, 20);
+                
+                if (ls.empty())
+                    return mateScore(depth);
+
+                if (canForceDraw) return 0;
+            }
 
             ScoreT value = MIN_SCORE;
             for (const auto &mov: ls) {
@@ -95,10 +132,12 @@ namespace sc {
             }
 
             // either we are in a higher mode OR we have higher depth in the same mode
-            if ((!QUIESC && !tt.isFull) || (depth > tt.depth && (QUIESC ^ tt.isFull))) {
+            if (tt_strength(depth, QUIESC) >= tt_strength(tt.depth, tt.isQuiesc)) {
+                tt.hash = 0;
                 tt.depth = depth;
-                tt.isFull = !QUIESC;
+                tt.isQuiesc = QUIESC;
                 tt.score = value;
+                tt.hash = pos->get_state()->hash;
             }
 
             return value;
@@ -128,6 +167,7 @@ namespace sc {
         }
 
         std::cout << "info string eval " << (double) best / PAWN_SCORE << '\n';
+        std::cout << "info string ttHits = " << me.getTTHits() << '\n';
     }
 
     void EngineV2::stop_search() {

@@ -153,19 +153,6 @@ namespace sc {
         NORMAL = 0, PROMOTION, EN_PASSANT, CASTLE
     };
 
-    // info about a position that we would like to store separately for move undo
-    struct StateInfo {
-        StateInfo *prev = nullptr; // history of game states is kept in a linked list.
-        uint64_t hash = 0x927b1a7aed74a025ULL;
-        int halfmoves = 0; // number of plies since a capture or pawn advance
-
-        CastlingRights castlingRights;
-        Square enPassantTarget = NULL_SQUARE;
-        ColoredType capturedPiece = NULL_COLORED_TYPE;
-
-        uint8_t reps = 0;
-    };
-
     extern uint64_t zob_IsWhiteTurn;
     extern uint64_t zob_EnPassantFile[8];
     extern uint64_t zob_CastlingRights[4];
@@ -194,7 +181,22 @@ namespace sc {
 
         // note: this doesn't append stuff for check and mate. manually do that by querying it after
         // calling make_move()
-        [[nodiscard]] std::string standard_alg_notation(Position &pos) const;
+        [[nodiscard]] std::string standard_alg_notation(const Position &pos) const;
+    };
+
+    // info about a position that we would like to store separately for move undo
+    struct StateInfo {
+        StateInfo *prev = nullptr; // history of game states is kept in a linked list.
+        uint64_t hash = 0x927b1a7aed74a025ULL;
+        int halfmoves = 0; // number of plies since a capture or pawn advance
+
+        CastlingRights castlingRights;
+        Square enPassantTarget = NULL_SQUARE;
+        ColoredType capturedPiece = NULL_COLORED_TYPE;
+
+        Move prevMove{};
+
+        uint8_t reps = 0;
     };
 
     class MoveList;

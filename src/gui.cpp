@@ -6,6 +6,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 
 #include "scacus/movegen.hpp"
 #include "scacus/uci.hpp"
@@ -16,7 +17,7 @@ using namespace sc;
 
 
 int main(int, char **) {
-    if (true) {
+    if (false) {
         sc::UCI().run();
         return 0;
     }
@@ -41,6 +42,7 @@ int main(int, char **) {
     std::cout << "Sizeof (Position) = " << sizeof(sc::Position) << std::endl;
 
     sc::Position pos;
+    bool quiescMovegen = false;
 
     std::string pgn;
     int turnNum = 1;
@@ -101,7 +103,7 @@ int main(int, char **) {
         int w, h;
         SDL_GetWindowSize(win, &w, &h);
 
-        if (legal_moves_from<false>(pos).empty()) {
+        if (false && legal_moves_from<false>(pos).empty()) {
             running = false;
             break;
         }
@@ -152,8 +154,9 @@ int main(int, char **) {
                     // std::cout << "Engine evaluation: " << engineMove.second << "\n";
                 } else {
                     legalMoves.clear();
-                    if (pos.get_turn() == WHITE_SIDE) sc::standard_moves<WHITE_SIDE, false>(legalMoves, pos);
-                    else sc::standard_moves<BLACK_SIDE, false>(legalMoves, pos);
+                    #define STD_MOVFUNC(side, quiesc) (quiesc ? sc::standard_moves<side, true> : sc::standard_moves<side, false>)(legalMoves, pos)
+                    if (pos.get_turn() == WHITE_SIDE) STD_MOVFUNC(WHITE_SIDE, quiescMovegen);
+                    else STD_MOVFUNC(BLACK_SIDE, quiescMovegen);
                 }
 
                 break;
@@ -215,11 +218,53 @@ int main(int, char **) {
                 case SDLK_e:
                     std::cout << pgn << std::endl;
                     break;
+                case SDLK_s:
+                    quiescMovegen ^= true;
+                    break;
+                case SDLK_c: {
+                    std::cout << "ENTER LONG ALG NOTATION>";
+                    std::string inp;
+                    std::getline(std::cin, inp);
+                    // pos.set_state_from_fen(STARTING_POS_FEN);'
+                    std::istringstream ss(inp);
+                    std::string tok;
+
+                    int counter = 1;
+                    while (!ss.eof()) {
+                        ss >> tok;
+                        Move mov{};
+                        mov.typeFlags = NORMAL;
+                        mov.promote = PROMOTE_QUEEN;
+
+                        char last = tok.at(tok.size() - 1);
+                        if (last > 'a') { // last character is promotion type! (otherwise it would be a number and this test fails)
+                            mov.typeFlags = PROMOTION;
+                            mov.promote = static_cast<PromoteType>((int) type_from_char(last) - 2);
+                        }
+
+                        mov.src = new_square(tok.at(0), tok.at(1) - '0');
+                        mov.dst = new_square(tok.at(2), tok.at(3) - '0');
+
+                        if ((pos.by_type(KING) & to_bitboard(mov.src)) && std::abs(mov.dst - mov.src) == 2)
+                            mov.typeFlags = CASTLE;
+
+                        if (pos.get_state()->enPassantTarget == mov.dst)
+                            mov.typeFlags = EN_PASSANT;
+
+                        if (counter++ % 2 == 1)
+                            std::cout << counter / 2 << ". ";
+                        std::cout << mov.standard_alg_notation(pos) << ' ';
+                        undoMoves.push_back(mov);
+                        make_move(pos, mov);
+                    }
+                    std::cout << '\n';
+                    break;
+                }
                 case SDLK_i:
                     std::cout << "ENTER FEN> ";
                     std::string fen;
                     std::getline(std::cin, fen);
-                    pos = Position{fen};
+                    pos.set_state_from_fen(fen);
                     break;
                 }
             }
