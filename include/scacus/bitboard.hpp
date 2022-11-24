@@ -208,6 +208,8 @@ namespace sc {
         Position() : Position(std::string{STARTING_POS_FEN}) {};
         [[nodiscard]] std::string get_fen() const;
 
+        ~Position();
+
         Position(const Position &) = delete;
         Position &operator=(const Position &) = delete;
 
@@ -235,6 +237,9 @@ namespace sc {
         [[nodiscard]] constexpr inline ColoredType piece_at(const int ind) const { return pieces[ind]; }
         [[nodiscard]] constexpr inline bool in_check() const { return isInCheck; }
         [[nodiscard]] constexpr Side get_turn() const { return turn; }
+
+        // copy this position into another memory location. Deep copies.
+        void copy_into(Position *dst) const;
 
     private:
         ColoredType pieces[BOARD_SIZE];

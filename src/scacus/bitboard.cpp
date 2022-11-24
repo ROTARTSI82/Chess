@@ -4,7 +4,7 @@
 #include <stdexcept>
 
 #include <array>
-
+#include <cstring>
 namespace sc {
 
     uint64_t zob_IsWhiteTurn = 0x5a35192d1f06d29aULL;
@@ -262,5 +262,27 @@ namespace sc {
             std::cout << movs.at(i).long_alg_notation() << '\t';
         }
         std::cout << '\n';
+    }
+
+    void Position::copy_into(Position *dst) const {
+        memcpy(dst, this, sizeof(Position));
+
+        // this is extremely cursed but i hope it works.
+        StateInfo **toSet = &dst->state;
+        while (*toSet) {
+            StateInfo *orig = *toSet;
+            *toSet = new StateInfo{};
+            **toSet = *orig;
+            *toSet = (*toSet)->prev;
+        }
+    }
+
+    Position::~Position() {
+        StateInfo *it = state;
+        while (it) {
+            StateInfo *prev = it->prev;
+            delete it;
+            it = prev;
+        }
     }
 }

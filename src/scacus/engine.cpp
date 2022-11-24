@@ -1,5 +1,7 @@
 #include "scacus/engine.hpp"
 #include <algorithm>
+#include <thread>
+#include <vector>
 
 #include "scacus/bitboard.hpp"
 
@@ -148,26 +150,35 @@ namespace sc {
     void EngineV2::start_search(int maxDepth) {
         // return;
         maxDepth = 6;
-        SearchThread me{pos, static_cast<DepthT>(maxDepth)};
         MoveList ls = legal_moves_from<false>(*pos);
 
         ScoreT best = MIN_SCORE;
+        std::vector<std::thread> workers;
         for (const auto &mov : ls) {
-            make_move(*pos, mov);
-            const auto score = -me.search<false>(MIN_SCORE, MAX_SCORE, maxDepth - 1);
+            workers.push_back(std::thread([=, &best = best]() {
+                Position cpos;
+                pos->copy_into(&cpos);
 
-            std::cout << "info string mov " << mov.long_alg_notation() << " score " << (double) score / PAWN_SCORE << '\n';
-            
-            if (score > best) {
-                best = score;
-                best_mov = mov;
-            }
+                SearchThread me{&cpos, static_cast<DepthT>(maxDepth)};
 
-            unmake_move(*pos, mov);
+                make_move(cpos, mov);
+                const auto score = -me.search<false>(MIN_SCORE, MAX_SCORE, maxDepth - 1);
+
+                std::cout << "info string mov " << mov.long_alg_notation() << " score " << (double) score / PAWN_SCORE << " ttHits = " << me.getTTHits() << '\n';
+                
+                if (score > best) {
+                    best = score;
+                    best_mov = mov;
+                }
+
+                unmake_move(cpos, mov);
+            }));
         }
 
+        for (auto &t : workers)
+            t.join();
+
         std::cout << "info string eval " << (double) best / PAWN_SCORE << '\n';
-        std::cout << "info string ttHits = " << me.getTTHits() << '\n';
     }
 
     void EngineV2::stop_search() {
