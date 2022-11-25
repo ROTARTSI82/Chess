@@ -33,11 +33,11 @@ elseif()
 endif()
 
 
-set(USE_DBG false)
+set(USE_DBG true)
 if (USE_DBG)
     message("-- !! Debug symbols enabled!!")
-    add_compile_options(-g3 -glldb -fno-omit-frame-pointer)
-    add_link_options(-g3 -glldb -fno-omit-frame-pointer)
+    add_compile_options(-g3 -ggdb -fno-omit-frame-pointer)# -Q -ftime-report -v)
+    add_link_options(-g3 -ggdb -fno-omit-frame-pointer)# -Q -ftime-report -v)
 endif()
 
 set(USE_ASAN false)

@@ -51,6 +51,9 @@ namespace sc {
         return pinned;
     }
 
+    // if true, quiescence move generation will include checks.
+    constexpr bool INCLUDE_CHECKS = false;
+
     template <Side SIDE, bool QUIESC>
     void standard_moves(MoveList &ls, Position &pos) {
         pos.isInCheck = false;
@@ -62,10 +65,6 @@ namespace sc {
         const Bitboard kingBb = self & pos.by_type(KING);
         const Square kingSq = get_lsb(kingBb);
         const Square opponentKing = get_lsb(opponent & pos.by_type(KING));
-
-        if (QUIESC && (kingBb == 0 || (opponent & pos.by_type(KING)) == 0)) {
-            dbg_dump_position(pos);
-        }
 
         Bitboard attk = 0; // bitboard being attacked by the opposite side
         Bitboard checkers = 0; // pieces giving check directly
@@ -129,19 +128,22 @@ namespace sc {
 
         // discovered checks is only set for quiescence, which handle them specially
         Bitboard normals = self & ~pinned;
-        if (DO_QUIESC) normals &= ~discoveredChecks;
+        
+        #define GET_QUIESC_TERM(checkSqs) DO_QUIESC ? occ | (INCLUDE_CHECKS ? (checkSqs) : 0ULL) : ~0ULL
+
+        if (DO_QUIESC && INCLUDE_CHECKS) normals &= ~discoveredChecks;
         {
             // note: in quiescence searches only look for moves giving check or capturing a piece
             Bitboard it = normals & (pos.by_type(BISHOP) | pos.by_type(QUEEN));
-            Bitboard quiescTerm = DO_QUIESC ? occ | lookup<BISHOP_MAGICS>(opponentKing, occ) : ~0ULL;
+            Bitboard quiescTerm = GET_QUIESC_TERM(lookup<BISHOP_MAGICS>(opponentKing, occ));
             ACCUM_MOVES(lookup<BISHOP_MAGICS>(SQ, occ), it, landing & quiescTerm, ls, pos);
 
             it = normals & (pos.by_type(ROOK) | pos.by_type(QUEEN));
-            quiescTerm = DO_QUIESC ? occ | lookup<ROOK_MAGICS>(opponentKing, occ) : ~0ULL;
+            quiescTerm = GET_QUIESC_TERM(lookup<ROOK_MAGICS>(opponentKing, occ));
             ACCUM_MOVES(lookup<ROOK_MAGICS>(SQ, occ), it, landing & quiescTerm, ls, pos);
 
             it = normals & pos.by_type(KNIGHT);
-            quiescTerm = DO_QUIESC ? occ | knight_moves(opponentKing) : ~0ULL;
+            quiescTerm = GET_QUIESC_TERM(knight_moves(opponentKing));
             ACCUM_MOVES(knight_moves(SQ), it, landing & quiescTerm, ls, pos);
 
             // king movement
@@ -149,7 +151,7 @@ namespace sc {
 
             // allow king to either capture or create discovered check
             if (DO_QUIESC)
-                it &= occ | ((kingBb & discoveredChecks) != 0 ? ~discoveryLines[kingSq] : 0ULL);
+                it &= occ | (INCLUDE_CHECKS && (kingBb & discoveredChecks) != 0 ? ~discoveryLines[kingSq] : 0ULL);
 
             while (it)
                 ls.push_back(new_move_normal(kingSq, pop_lsb(it)));
@@ -194,7 +196,7 @@ namespace sc {
                 if (DO_QUIESC) {
                     Bitboard checkSqs = pawn_attacks<opposite_side(SIDE)>(opponentKing);
                     Bitboard discoveryTerm = ((to_bitboard(SQ) & discoveredChecks) != 0 ? ~discoveryLines[SQ] : 0ULL);
-                    destinations &= checkSqs | occ | discoveryTerm;
+                    destinations &= occ | (INCLUDE_CHECKS ? discoveryTerm | checkSqs : 0ULL);
                 }
 
                 Bitboard promotions = destinations & (rank_bb(8) | rank_bb(1));
@@ -227,15 +229,18 @@ namespace sc {
                     destinations &= pseudo_attacks<BISHOP_MAGICS>(sq);
                 
                 if (DO_QUIESC) {
-                    Bitboard quiescAllowed = (to_bitboard(sq) & discoveredChecks) != 0 ? ~discoveryLines[sq] : 0ULL;
-                    quiescAllowed |= occ;
+                    Bitboard quiescAllowed = occ;
                     
-                    // TODO: These moves are probably bad, so do we even bother searching for them???
-                    Type type = type_of(pos.pieces[sq]);
-                    if (type == ROOK || type == QUEEN)
-                        quiescAllowed |= pseudo_attacks<ROOK_MAGICS>(opponentKing);
-                    if (type == BISHOP || type == QUEEN)
-                        quiescAllowed |= pseudo_attacks<BISHOP_MAGICS>(opponentKing);
+                    if (INCLUDE_CHECKS) {
+                        quiescAllowed |= (to_bitboard(sq) & discoveredChecks) != 0 ? ~discoveryLines[sq] : 0ULL;
+
+                        // TODO: These moves are probably bad, so do we even bother searching for them???
+                        Type type = type_of(pos.pieces[sq]);
+                        if (type == ROOK || type == QUEEN)
+                            quiescAllowed |= pseudo_attacks<ROOK_MAGICS>(opponentKing);
+                        if (type == BISHOP || type == QUEEN)
+                            quiescAllowed |= pseudo_attacks<BISHOP_MAGICS>(opponentKing);
+                    }
                     
                     destinations &= quiescAllowed;
                 }

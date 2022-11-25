@@ -252,7 +252,7 @@ namespace sc {
         }
 
         std::cout << "MOVES\n";
-        int num = 1;
+        // int num = 1;
         // for (int i = movs.size() - 1; i >= 0; i--) {
         //     std::cout << num++ << ". " << movs.at(i).standard_alg_notation(pos) << ' ';
         // }
@@ -267,13 +267,14 @@ namespace sc {
     void Position::copy_into(Position *dst) const {
         memcpy(dst, this, sizeof(Position));
 
+        dst->state = state;
         // this is extremely cursed but i hope it works.
         StateInfo **toSet = &dst->state;
         while (*toSet) {
             StateInfo *orig = *toSet;
             *toSet = new StateInfo{};
             **toSet = *orig;
-            *toSet = (*toSet)->prev;
+            toSet = &(*toSet)->prev;
         }
     }
 

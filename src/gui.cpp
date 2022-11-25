@@ -42,6 +42,7 @@ int main(int, char **) {
     std::cout << "Sizeof (Position) = " << sizeof(sc::Position) << std::endl;
 
     sc::Position pos;
+    pos.set_state_from_fen(STARTING_POS_FEN);
     bool quiescMovegen = false;
 
     std::string pgn;
@@ -88,7 +89,7 @@ int main(int, char **) {
     bool running = true;
 
     bool isSelected = false;
-    sc::Square selected;
+    sc::Square selected = 0;
 
     std::vector<sc::Move> undoMoves;
     std::vector<sc::StateInfo> undoCaps;

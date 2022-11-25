@@ -5,9 +5,6 @@
 
 #include "scacus/bitboard.hpp"
 
-using ScoreT = int;
-using DepthT = uint16_t;
-
 namespace {
     enum class TransposeType: uint_fast8_t {
         Full, BetaCut
@@ -15,8 +12,8 @@ namespace {
 
     struct Transposition {
         uint64_t hash = 0;
-        ScoreT score = 0;
-        DepthT depth = 0;
+        sc::ScoreT score = 0;
+        sc::DepthT depth = 0;
 //        sc::Move bestMove{};
         bool isQuiesc = true; // if false, it's a quiesc search
     };
@@ -34,6 +31,8 @@ namespace sc {
     constexpr auto MIN_SCORE = std::numeric_limits<ScoreT>::min() + 2;
     constexpr auto MAX_SCORE = std::numeric_limits<ScoreT>::max() - 2;
 
+    constexpr auto MOBILITY_VALUE = PAWN_SCORE / 512;
+
 
     inline static ScoreT eval_material(Position &pos) {
         const Side turn = pos.get_turn();
@@ -46,15 +45,15 @@ namespace sc {
 
         const Bitboard me = pos.by_side(turn);
         const Bitboard them = pos.by_side(opposite_side(turn));
-        return (popcnt(me & bishops) - popcnt(them & bishops)) * 330
-                + (popcnt(me & knights) - popcnt(them & knights)) * 320
-                + (popcnt(me & rooks) - popcnt(them & rooks)) * 500
-                + (popcnt(me & queens) - popcnt(them & queens)) * 900
-                + (popcnt(me & pawns) - popcnt(them & pawns)) * 100;
+        return (popcnt(me & bishops) - popcnt(them & bishops)) * 33 * PAWN_SCORE / 10
+                + (popcnt(me & knights) - popcnt(them & knights)) * 32 * PAWN_SCORE / 10
+                + (popcnt(me & rooks) - popcnt(them & rooks)) * 5 * PAWN_SCORE
+                + (popcnt(me & queens) - popcnt(them & queens)) * 9 * PAWN_SCORE
+                + (popcnt(me & pawns) - popcnt(them & pawns)) * PAWN_SCORE;
     }
 
-    inline static unsigned tt_strength(DepthT depth, bool quiesc) {
-        return (quiesc ? 16 : 256) + depth;
+    inline static uint64_t tt_strength(DepthT depth, bool quiesc) {
+        return (quiesc ? 0ULL : 4096ULL) + depth;
     }
 
     class SearchThread {
@@ -62,6 +61,7 @@ namespace sc {
         Position *pos;
         DepthT startDepth;
         uint64_t ttHits = 0;
+        EngineV2 *eng;
 
     public:
 
@@ -69,7 +69,7 @@ namespace sc {
             return ttHits;
         }
 
-        SearchThread(Position *p, DepthT d) : pos(p), startDepth(d) {}
+        SearchThread(Position *p, DepthT d, EngineV2 *e) : pos(p), startDepth(d), eng(e) {}
 
         inline ScoreT mateScore(DepthT depth) {
             return pos->in_check() ? MATE_SCORE + (startDepth - depth) * MATE_STEP : 0;
@@ -88,13 +88,13 @@ namespace sc {
             else
                 standard_moves<WHITE_SIDE, false>(opp, *pos);
 
-            return eval_material(*pos) + (ls.size() - opp.size());
+            return eval_material(*pos) + (ls.size() - opp.size()) * MOBILITY_VALUE;
         }
 
         template <bool QUIESC>
-        inline ScoreT search(ScoreT alpha, ScoreT beta, DepthT depth) {
+        ScoreT search(ScoreT alpha, ScoreT beta, DepthT depth) {
             auto &tt = transTable[pos->get_state()->hash % TABLE_SIZE];
-            // either the tt is in a higher mode OR (higher depth and same mode)
+            // // either the tt is in a higher mode OR (higher depth and same mode)
             if (tt.hash == pos->get_state()->hash && tt_strength(depth, QUIESC) <= tt_strength(tt.depth, tt.isQuiesc)) {
                 ttHits++;
                 return tt.score;
@@ -106,17 +106,17 @@ namespace sc {
 
             if (QUIESC) {
                 ScoreT ev = canForceDraw ? 0 : eval(depth);
-                if (ev > beta || ls.empty() || depth <= 0) // depth limit is bad but whatever
+                if (ev > beta || ls.empty() || depth <= 0 || !eng->is_running()) // depth limit is bad but whatever
                     return ev;
                 alpha = std::max(alpha, ev);
             } else {
-                if (depth <= 0)
-                    return search<true>(alpha, beta, 20);
-                
                 if (ls.empty())
                     return mateScore(depth);
 
                 if (canForceDraw) return 0;
+
+                if (depth <= QUIESC_DEPTH || !eng->is_running())
+                    return search<true>(alpha, beta, depth - 1);
             }
 
             ScoreT value = MIN_SCORE;
@@ -134,7 +134,7 @@ namespace sc {
             }
 
             // either we are in a higher mode OR we have higher depth in the same mode
-            if (tt_strength(depth, QUIESC) >= tt_strength(tt.depth, tt.isQuiesc)) {
+            if (tt.hash != pos->get_state()->hash || tt_strength(depth, QUIESC) >= tt_strength(tt.depth, tt.isQuiesc)) {
                 tt.hash = 0;
                 tt.depth = depth;
                 tt.isQuiesc = QUIESC;
@@ -147,41 +147,84 @@ namespace sc {
     };
 
 
+    void workerFunc(EngineV2 *eng) {
+        Position cpos;
+        eng->pos->copy_into(&cpos);
+
+        while (eng->is_running()) {
+            SearchTask task;
+            {
+                std::unique_lock<std::mutex> lg(eng->taskMtx);
+                eng->taskCv.wait(lg, [&]() { return !eng->is_running() || !eng->tasks.empty(); });
+                if (!eng->is_running()) return;
+
+                task = eng->tasks.top();
+                eng->tasks.pop();
+            }
+            std::cout << "info string exec " << task.mov.long_alg_notation() << " rank " << task.score / (double) PAWN_SCORE << " depth " << task.depth << '\n';
+
+            SearchThread me{&cpos, static_cast<DepthT>(task.depth), eng};
+
+            make_move(cpos, task.mov);
+            const ScoreT score = -me.search<false>(MIN_SCORE, MAX_SCORE, task.depth - 1);
+
+            std::cout << "info string mov " << task.mov.long_alg_notation() << " score " 
+                      << (double) score / PAWN_SCORE << " ttHits = " << me.getTTHits() 
+                      << " depth " << task.depth << '\n';
+
+            unmake_move(cpos, task.mov);
+
+            if (!eng->running)
+                return;
+
+            if (score > eng->best_score) {
+                eng->best_score = score;
+                eng->best_mov = task.mov;
+            }
+
+            task.depth++;
+            task.score = score;
+
+            {
+                std::unique_lock<std::mutex> lg(eng->taskMtx);
+                eng->tasks.push(task);
+            }
+
+            eng->taskCv.notify_one();
+        }
+    }
+
     void EngineV2::start_search(int maxDepth) {
-        // return;
-        maxDepth = 6;
         MoveList ls = legal_moves_from<false>(*pos);
 
-        ScoreT best = MIN_SCORE;
-        std::vector<std::thread> workers;
+        while (!tasks.empty())
+            tasks.pop();
+
+        workers.clear();
+        running = true;
+        best_score = MIN_SCORE;
+
         for (const auto &mov : ls) {
-            workers.push_back(std::thread([=, &best = best]() {
-                Position cpos;
-                pos->copy_into(&cpos);
+            SearchTask task{};
+            task.mov = mov;
+            task.score = 0;
+            task.depth = QUIESC_DEPTH + 2;
 
-                SearchThread me{&cpos, static_cast<DepthT>(maxDepth)};
-
-                make_move(cpos, mov);
-                const auto score = -me.search<false>(MIN_SCORE, MAX_SCORE, maxDepth - 1);
-
-                std::cout << "info string mov " << mov.long_alg_notation() << " score " << (double) score / PAWN_SCORE << " ttHits = " << me.getTTHits() << '\n';
-                
-                if (score > best) {
-                    best = score;
-                    best_mov = mov;
-                }
-
-                unmake_move(cpos, mov);
-            }));
+            tasks.push(task);
         }
 
-        for (auto &t : workers)
-            t.join();
-
-        std::cout << "info string eval " << (double) best / PAWN_SCORE << '\n';
+        for (unsigned i = 0; i < std::thread::hardware_concurrency(); i++)
+            workers.push_back(std::thread(workerFunc, this));
     }
 
     void EngineV2::stop_search() {
+        running = false;
+        taskCv.notify_all();
+        for (auto &thread : workers)
+            thread.join();
+        workers.clear();
 
+        while (!tasks.empty())
+            tasks.pop();
     }
 }

@@ -63,8 +63,11 @@ namespace sc {
 
                 Square it = sq;
                 Bitboard bb = 0;
-                while (!does_wrap(it, dir))
-                    PIN_LINE[sq][it] = bb |= to_bitboard(it += dir);
+                while (!does_wrap(it, dir)) {
+                    it += dir;
+                    bb |= to_bitboard(it);
+                    PIN_LINE[sq][it] = bb;
+                }
             }
 
 
@@ -128,8 +131,8 @@ namespace {
         static uint64_t tableLoc = 0;
 
         const auto directions = TABLE == BISHOP_MAGICS ?
-                                std::initializer_list<int>{Dir::NE, Dir::NW, Dir::SE, Dir::SW} :
-                                std::initializer_list<int>{Dir::N, Dir::S, Dir::E, Dir::W};
+                                std::vector<int>{{Dir::NE, Dir::NW, Dir::SE, Dir::SW}} :
+                                std::vector<int>{{Dir::N, Dir::S, Dir::E, Dir::W}};
 
         auto numBits = popcnt(TABLE[sq].mask);
         TABLE[sq].shift = (64 - numBits);

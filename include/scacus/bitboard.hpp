@@ -64,12 +64,15 @@ namespace sc {
     constexpr Bitboard EDGES_BB = file_bb('a') | file_bb('h') | rank_bb(1) | rank_bb(8);
 
     namespace Dir {
-        enum : int {
-            NW = 7, N = 8, NE = 9,
-            W = -1, NONE = 0, E = 1,
-            SW = -9, S = -8, SE = -7,
-        };
-
+        constexpr int NW = 7;
+        constexpr int N = 8;
+        constexpr int NE = 9;
+        constexpr int W = -1;
+        constexpr int E = 1;
+        constexpr int SW = -9;
+        constexpr int S = -8;
+        constexpr int SE = -7;
+        
         constexpr std::array<int, 8> KNIGHT_OFFSETS = {{15, 17, 6, 10, -10, -6, -17, -15}};
     }
 
@@ -216,14 +219,14 @@ namespace sc {
         // store: Used to store the index into the string that we read to
         void set_state_from_fen(const std::string &fen, int *store = nullptr);
 
-        constexpr inline void set(const Square p, const Type type, const Side side) {
+        inline void set(const Square p, const Type type, const Side side) {
             pieces[p] = new_ColoredType(type, side);
             byType[type] |= to_bitboard(p);
             byColor[side] |= to_bitboard(p);
             state->hash ^= zob_Pieces[p][pieces[p]];
         }
 
-        constexpr inline void clear(const Square p) {
+        inline void clear(const Square p) {
             state->hash ^= zob_Pieces[p][pieces[p]];
             byType[type_of(pieces[p])] &= ~to_bitboard(p); 
             byColor[side_of(pieces[p])] &= ~to_bitboard(p);

@@ -11,7 +11,7 @@ namespace sc {
 
         inline MoveList() = delete;
 
-        MoveList &operator=(const MoveList &&rhs) noexcept = delete;;
+        MoveList &operator=(const MoveList &&rhs) noexcept = delete;
         MoveList(const MoveList &rhs) noexcept = delete;
 
         inline explicit MoveList(int) : head(data), tail(head) {};

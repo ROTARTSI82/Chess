@@ -28,15 +28,15 @@ namespace sc {
         return mov | ((SIDE == BLACK_SIDE ? shift >> 8 : shift << 8) & ~occ);
     }
 
-    inline constexpr Bitboard king_moves(Square sq) {
+    inline Bitboard king_moves(Square sq) {
         return KING_MOVES[sq];
     }
 
-    inline constexpr Bitboard knight_moves(Square sq) {
+    inline Bitboard knight_moves(Square sq) {
         return KNIGHT_MOVES[sq];
     }
 
-    inline constexpr Bitboard pin_line(Square king, Square pinner) {
+    inline Bitboard pin_line(Square king, Square pinner) {
         return PIN_LINE[king][pinner];
     }
 
