@@ -17,7 +17,7 @@ using namespace sc;
 
 
 int main(int, char **) {
-    if (false) {
+    if (true) {
         sc::UCI().run();
         return 0;
     }

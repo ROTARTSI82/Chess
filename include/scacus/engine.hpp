@@ -12,10 +12,20 @@
 #include <condition_variable>
 
 namespace sc {
-    using DepthT = unsigned;
+    using DepthT = int;
     using ScoreT = int;
 
-    constexpr auto QUIESC_DEPTH = 32;
+    constexpr auto QUIESC_DEPTH = 0;
+    constexpr ScoreT PAWN_SCORE = 512;
+
+    // We can't actually use min because -min is not max! In fact, -min is negative! 
+    constexpr auto MATE_SCORE = -10000 * PAWN_SCORE;
+    constexpr auto MATE_STEP = 200 * PAWN_SCORE;
+    constexpr auto MIN_SCORE = std::numeric_limits<ScoreT>::min() + 2;
+    constexpr auto MAX_SCORE = std::numeric_limits<ScoreT>::max() - 2;
+
+    constexpr auto MOBILITY_VALUE = PAWN_SCORE / 512;
+
 
     // transposition tables are global and defined in engine.cpp
 
@@ -36,13 +46,20 @@ namespace sc {
     private:
         Position *pos;
 
+        // why did i name some with camelCase and some with snake_case?
+        // i don't even know
         std::vector<std::thread> workers;
         std::priority_queue<SearchTask> tasks;
-        std::mutex taskMtx;
+        std::mutex taskMtx, bestMtx;
         std::condition_variable taskCv;
 
-        Move best_mov;
-        std::atomic<ScoreT> best_score;
+        struct EngineLine {
+            Move best_mov{};
+            ScoreT best_score = MIN_SCORE;
+        };
+
+        EngineLine prelim_line, true_line;
+        DepthT search_depth = 0; // the depth level we are currently searching
 
         std::atomic<bool> running = true;
 
@@ -50,6 +67,9 @@ namespace sc {
 
     public:
         EngineV2() = default;
+
+        EngineV2(const EngineV2 &) = delete;
+        EngineV2 &operator=(const EngineV2 &) = delete;
 
         void start_search(int maxDepth = 99);
         void stop_search();
@@ -59,7 +79,7 @@ namespace sc {
         }
 
         [[nodiscard]] inline Move best_move() const {
-            return best_mov;
+            return true_line.best_mov;
         }
 
         // can be an estimate. Search is optimized for best

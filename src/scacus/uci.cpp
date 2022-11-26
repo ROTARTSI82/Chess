@@ -102,8 +102,6 @@ namespace sc {
 
         if (tok == "moves") {
             while (!stream.eof()) {
-                std::cout << "HASH\t" << pos.get_state()->hash << '\n';
-
                 stream >> tok;
 
                 Move mov{};
@@ -178,7 +176,7 @@ namespace sc {
         } else if (line.rfind("go", 0) == 0) {
             // go = true;
             eng.start_search(6);
-            // std::this_thread::sleep_for(std::chrono::seconds(8));
+            std::this_thread::sleep_for(std::chrono::seconds(8));
             eng.stop_search();
             COUT << "bestmove " << eng.best_move().long_alg_notation() << std::endl;
         } else if (line == "quit") {

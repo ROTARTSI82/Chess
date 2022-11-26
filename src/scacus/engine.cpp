@@ -20,20 +20,11 @@ namespace {
 
     constexpr auto TABLE_SIZE = 4096 * 4096;
     Transposition transTable[TABLE_SIZE] = {{}};
+
+    std::mutex ttMtx;
 }
 
 namespace sc {
-    constexpr ScoreT PAWN_SCORE = 512;
-
-    // We can't actually use min because -min is not max! In fact, -min is negative! 
-    constexpr auto MATE_SCORE = -10000 * PAWN_SCORE;
-    constexpr auto MATE_STEP = 200 * PAWN_SCORE;
-    constexpr auto MIN_SCORE = std::numeric_limits<ScoreT>::min() + 2;
-    constexpr auto MAX_SCORE = std::numeric_limits<ScoreT>::max() - 2;
-
-    constexpr auto MOBILITY_VALUE = PAWN_SCORE / 512;
-
-
     inline static ScoreT eval_material(Position &pos) {
         const Side turn = pos.get_turn();
 
@@ -52,8 +43,8 @@ namespace sc {
                 + (popcnt(me & pawns) - popcnt(them & pawns)) * PAWN_SCORE;
     }
 
-    inline static uint64_t tt_strength(DepthT depth, bool quiesc) {
-        return (quiesc ? 0ULL : 4096ULL) + depth;
+    inline static long tt_strength(DepthT depth, bool quiesc) {
+        return quiesc ? 0 : (4096 + depth);
     }
 
     class SearchThread {
@@ -91,13 +82,20 @@ namespace sc {
             return eval_material(*pos) + (ls.size() - opp.size()) * MOBILITY_VALUE;
         }
 
+        #define USE_TT 1
+
         template <bool QUIESC>
         ScoreT search(ScoreT alpha, ScoreT beta, DepthT depth) {
-            auto &tt = transTable[pos->get_state()->hash % TABLE_SIZE];
-            // // either the tt is in a higher mode OR (higher depth and same mode)
-            if (tt.hash == pos->get_state()->hash && tt_strength(depth, QUIESC) <= tt_strength(tt.depth, tt.isQuiesc)) {
-                ttHits++;
-                return tt.score;
+
+            Transposition *tt;
+            if (USE_TT) {
+                std::lock_guard<std::mutex> lg(ttMtx);
+                tt = &transTable[pos->get_state()->hash % TABLE_SIZE];
+                // // either the tt is in a higher mode OR (higher depth and same mode)
+                if (tt->hash == pos->get_state()->hash && tt_strength(depth, QUIESC) <= tt_strength(tt->depth, tt->isQuiesc)) {
+                    ttHits++;
+                    return tt->score;
+                }
             }
             
             MoveList ls = legal_moves_from<QUIESC>(*pos);
@@ -106,7 +104,7 @@ namespace sc {
 
             if (QUIESC) {
                 ScoreT ev = canForceDraw ? 0 : eval(depth);
-                if (ev > beta || ls.empty() || depth <= 0 || !eng->is_running()) // depth limit is bad but whatever
+                if (ev >= beta || ls.empty() || !eng->is_running() /* || depth <= 0 */ )
                     return ev;
                 alpha = std::max(alpha, ev);
             } else {
@@ -115,15 +113,19 @@ namespace sc {
 
                 if (canForceDraw) return 0;
 
-                if (depth <= QUIESC_DEPTH || !eng->is_running())
+                if (depth <= QUIESC_DEPTH || !eng->is_running()) {
                     return search<true>(alpha, beta, depth - 1);
+                }
             }
 
             ScoreT value = MIN_SCORE;
             for (const auto &mov: ls) {
                 make_move(*pos, mov);
 
-                value = std::max(-search<QUIESC>(-beta, -alpha, depth - 1), value);
+                if (QUIESC || depth <= QUIESC_DEPTH + 1)
+                    value = std::max(-search<true>(-beta, -alpha, depth - 1), value);
+                else
+                    value = std::max(-search<false>(-beta, -alpha, depth - 1), value);
                 alpha = std::max(value, alpha);
 
                 unmake_move(*pos, mov);
@@ -133,16 +135,20 @@ namespace sc {
                 }
             }
 
-            // either we are in a higher mode OR we have higher depth in the same mode
-            if (tt.hash != pos->get_state()->hash || tt_strength(depth, QUIESC) >= tt_strength(tt.depth, tt.isQuiesc)) {
-                tt.hash = 0;
-                tt.depth = depth;
-                tt.isQuiesc = QUIESC;
-                tt.score = value;
-                tt.hash = pos->get_state()->hash;
+            if (USE_TT) {
+                std::lock_guard<std::mutex> lg(ttMtx);
+
+                // either we are in a higher mode OR we have higher depth in the same mode
+                if (tt->hash != pos->get_state()->hash || tt_strength(depth, QUIESC) >= tt_strength(tt->depth, tt->isQuiesc)) {
+                    tt->hash = 0;
+                    tt->depth = depth;
+                    tt->isQuiesc = QUIESC;
+                    tt->score = value;
+                    tt->hash = pos->get_state()->hash;
+                }
             }
 
-            return value;
+            return QUIESC ? alpha : value; // or QUIESC ? alpha : value;
         }
     };
 
@@ -161,7 +167,7 @@ namespace sc {
                 task = eng->tasks.top();
                 eng->tasks.pop();
             }
-            std::cout << "info string exec " << task.mov.long_alg_notation() << " rank " << task.score / (double) PAWN_SCORE << " depth " << task.depth << '\n';
+            // std::cout << "info string exec " << task.mov.long_alg_notation() << " rank " << task.score / (double) PAWN_SCORE << " depth " << task.depth << '\n';
 
             SearchThread me{&cpos, static_cast<DepthT>(task.depth), eng};
 
@@ -174,12 +180,30 @@ namespace sc {
 
             unmake_move(cpos, task.mov);
 
-            if (!eng->running)
-                return;
+            {
+                std::lock_guard<std::mutex> lg(eng->bestMtx);
 
-            if (score > eng->best_score) {
-                eng->best_score = score;
-                eng->best_mov = task.mov;
+                // if we're searching a greater depth, 
+                // we must have completed the previous depth and can thus swap
+                // prelim with the true line.
+                // TODO: This is a scuffed way to detect finishing searching a depth.
+                // I think that there is still an edge case where we can get unlucky and miss out
+                // on a search depth if the last task running is the last task for the depth
+                if (task.depth > eng->search_depth) {
+                    std::cout << "info string depth complete: " << eng->search_depth << '\n';
+                    eng->true_line = eng->prelim_line;
+                    eng->prelim_line = EngineV2::EngineLine{};
+                    eng->search_depth = task.depth;
+                }
+
+                if (!eng->is_running())
+                    return;
+
+                // PROBLEM: Low depths can produce absurdly high scores!
+                if (score > eng->prelim_line.best_score) {
+                    eng->prelim_line.best_score = score;
+                    eng->prelim_line.best_mov = task.mov;
+                }
             }
 
             task.depth++;
@@ -202,7 +226,9 @@ namespace sc {
 
         workers.clear();
         running = true;
-        best_score = MIN_SCORE;
+        prelim_line = EngineLine{};
+        true_line = EngineLine{};
+        search_depth = 0;
 
         for (const auto &mov : ls) {
             SearchTask task{};

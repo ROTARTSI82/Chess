@@ -29,7 +29,7 @@ namespace sc {
         UCI()
         // : worker{workerFunc, this}
         {
-            dbg_dump_position(pos);
+            // dbg_dump_position(pos);
             running = false;
             workerFunc(this);
         }
