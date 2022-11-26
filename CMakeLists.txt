@@ -14,7 +14,7 @@ add_compile_options(-m64 -msse -msse3 -mpopcnt -mavx2 -msse4.1 -mssse3 -msse2 -m
 add_link_options(-m64 -msse -msse3 -mpopcnt -mavx2 -msse4.1 -mssse3 -msse2 -mbmi2)
 
 option(USE_ASAN "" false)
-option(USE_SDL "" false)
+option(USE_SDL "" true)
 option(USE_DBG "" false)
 
 

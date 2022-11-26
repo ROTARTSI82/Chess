@@ -159,8 +159,8 @@ namespace sc {
             // castling
             if (!checkers) {
                 constexpr auto sideIndex = (SIDE == WHITE_SIDE ? 2 : 0);
-                bool canKingside = pos.state->castlingRights & KINGSIDE_MASK << sideIndex;
-                bool canQueenside = pos.state->castlingRights & QUEENSIDE_MASK << sideIndex;
+                bool canKingside = pos.state.castlingRights & KINGSIDE_MASK << sideIndex;
+                bool canQueenside = pos.state.castlingRights & QUEENSIDE_MASK << sideIndex;
 
                 constexpr Bitboard checkMaskQueenside = CASTLING_ATTACK_MASKS[0 + sideIndex];
                 constexpr Bitboard checkMaskKingside = CASTLING_ATTACK_MASKS[1 + sideIndex];
@@ -260,15 +260,15 @@ namespace sc {
         }
 
         // en passant: always allowed even in quiescence
-        if (pos.state->enPassantTarget != NULL_SQUARE) {
-            Bitboard it = self & pos.by_type(PAWN) & pawn_attacks<opposite_side(SIDE)>(pos.state->enPassantTarget);
-            Bitboard ep = to_bitboard(pos.state->enPassantTarget);
+        if (pos.state.enPassantTarget != NULL_SQUARE) {
+            Bitboard it = self & pos.by_type(PAWN) & pawn_attacks<opposite_side(SIDE)>(pos.state.enPassantTarget);
+            Bitboard ep = to_bitboard(pos.state.enPassantTarget);
 
             while (it) {
                 const Square sq = pop_lsb(it);
                 const Bitboard bb = to_bitboard(sq);
 
-                const Bitboard capPawn = to_bitboard(pos.state->enPassantTarget
+                const Bitboard capPawn = to_bitboard(pos.state.enPassantTarget
                                                      + (SIDE == BLACK_SIDE ? Dir::N : Dir::S));
 
                 // if we are pinned, we need to land on the pin line
@@ -284,7 +284,7 @@ namespace sc {
                         (pos.by_type(QUEEN) | pos.by_type(ROOK)));
 
                 if ((PIN_PASSED) && (CHECK_PASSED) && (TARGET_PASSED))
-                    ls.push_back(new_move<EN_PASSANT>(sq, pos.get_state()->enPassantTarget));
+                    ls.push_back(new_move<EN_PASSANT>(sq, pos.get_state().enPassantTarget));
             }
         }
     }

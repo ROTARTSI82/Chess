@@ -168,7 +168,7 @@ int main(int, char **) {
                 } else switch (event.key.keysym.sym) {
                 case SDLK_f:
                     std::cout << pos.get_fen() << std::endl;
-                    std::cout << "zob: " << pos.get_state()->hash << std::endl;
+                    std::cout << "zob: " << pos.get_state().hash << std::endl;
                     break;
                 case SDLK_b:
                     drawBb = pos.by_type(BISHOP);
@@ -249,7 +249,7 @@ int main(int, char **) {
                         if ((pos.by_type(KING) & to_bitboard(mov.src)) && std::abs(mov.dst - mov.src) == 2)
                             mov.typeFlags = CASTLE;
 
-                        if (pos.get_state()->enPassantTarget == mov.dst)
+                        if (pos.get_state().enPassantTarget == mov.dst)
                             mov.typeFlags = EN_PASSANT;
 
                         if (counter++ % 2 == 1)

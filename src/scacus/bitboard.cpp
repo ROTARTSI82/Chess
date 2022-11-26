@@ -95,16 +95,16 @@ namespace sc {
 
     // TO IMPROVE
     void Position::set_state_from_fen(const std::string &fen, int *store) {
-        delete state;
-        state = new StateInfo{};
+//        delete state;
+//        state = new StateInfo{};
 
-        state->hash = 0x927b1a7aed74a025ULL;
+        state.hash = 0x927b1a7aed74a025ULL;
         for (int i = 0; i < BOARD_SIZE; i++) pieces[i] = NULL_COLORED_TYPE;
         for (int i = 0; i < NUM_UNCOLORED_PIECE_TYPES; i++) byType[i] = 0;
         for (int i = 0; i < NUM_SIDES; i++) byColor[i] = 0;
 
-        // for (int i = 0; i < NUM_SIDES; i++) state->pinned[i] = 0;
-        // for (int i = 0; i < NUM_UNCOLORED_PIECE_TYPES; i++) state->attackedSquares[i] = 0;
+        // for (int i = 0; i < NUM_SIDES; i++) state.pinned[i] = 0;
+        // for (int i = 0; i < NUM_UNCOLORED_PIECE_TYPES; i++) state.attackedSquares[i] = 0;
 
         int i = -1;
 
@@ -128,7 +128,7 @@ namespace sc {
 
         turn = fen.at(i++) == 'w' ? WHITE_SIDE : BLACK_SIDE;
 
-        state->castlingRights = 0;
+        state.castlingRights = 0;
         char castling = fen.at(++i); // skip space and get next char
         if (castling != '-') {
             while (fen.at(i) != ' ') {
@@ -136,17 +136,17 @@ namespace sc {
                 int castleIndex = tolower(c) == 'k' ? 1 : 0;
                 if (isupper(c)) castleIndex += 2;
 
-                state->castlingRights |= (1 << castleIndex);
-                state->hash ^= zob_CastlingRights[castleIndex];
+                state.castlingRights |= (1 << castleIndex);
+                state.hash ^= zob_CastlingRights[castleIndex];
             }
         } else { i++; }
 
         if (fen.at(++i) != '-') { // skip over space and get next char
-            state->enPassantTarget = new_square(fen.at(i), fen.at(i + 1) - '0');
-            state->hash ^= zob_EnPassantFile[file_ind_of(state->enPassantTarget)];
+            state.enPassantTarget = new_square(fen.at(i), fen.at(i + 1) - '0');
+            state.hash ^= zob_EnPassantFile[file_ind_of(state.enPassantTarget)];
             i++;
         } else {
-            state->enPassantTarget = NULL_SQUARE;
+            state.enPassantTarget = NULL_SQUARE;
         }
 
         i += 2; // skip both '-' AND space
@@ -155,11 +155,11 @@ namespace sc {
 
         // some fens don't include the halfmove/fullmove numbers for some reason?
 //        try {
-            state->halfmoves = std::stoi(fen.substr(i), &offset);
+            state.halfmoves = std::stoi(fen.substr(i), &offset);
             i += offset;
             fullmoves = std::stoi(fen.substr(i), &offset);
 //        } catch (const std::exception &e) {
-//            state->halfmoves = 0;
+//            state.halfmoves = 0;
 //            fullmoves = 1;
 //        }
 
@@ -210,13 +210,13 @@ namespace sc {
         }};
 
         for (const auto &way : castleTable)
-            if (state->castlingRights & way.first) { ret += way.second; nobodyCanCastle = false; }
+            if (state.castlingRights & way.first) { ret += way.second; nobodyCanCastle = false; }
         if (nobodyCanCastle) ret += '-';
 
         ret += ' ';
-        ret += (state->enPassantTarget != NULL_SQUARE ? sq_to_str(state->enPassantTarget) : "-");
+        ret += (state.enPassantTarget != NULL_SQUARE ? sq_to_str(state.enPassantTarget) : "-");
         ret += ' ';
-        ret += std::to_string(state->halfmoves);
+        ret += std::to_string(state.halfmoves);
         ret += ' ';
         ret += std::to_string(fullmoves);
         return ret;
@@ -224,7 +224,7 @@ namespace sc {
 
     void dbg_dump_position(const Position &pos) {
         std::cout << "FEN: " << pos.get_fen() << '\n';
-        std::cout << "captured piece: " << ct_to_char(pos.get_state()->capturedPiece) << '\n';
+        std::cout << "captured piece: " << ct_to_char(pos.get_state().capturedPiece) << '\n';
         
         std::cout << "\n\nWHITE:\n";
         print_bb(pos.by_side(WHITE_SIDE));
@@ -244,7 +244,7 @@ namespace sc {
         std::cout << "\n\nROOKS:\n";
         print_bb(pos.by_type(ROOK));
 
-        const StateInfo *it = pos.get_state();
+        const StateInfo *it = &pos.get_state();
         std::vector<Move> movs;
         while (it) {
             movs.push_back(it->prevMove);
@@ -264,26 +264,26 @@ namespace sc {
         std::cout << '\n';
     }
 
-    void Position::copy_into(Position *dst) const {
-        memcpy(dst, this, sizeof(Position));
-
-        dst->state = state;
-        // this is extremely cursed but i hope it works.
-        StateInfo **toSet = &dst->state;
-        while (*toSet) {
-            StateInfo *orig = *toSet;
-            *toSet = new StateInfo{};
-            **toSet = *orig;
-            toSet = &(*toSet)->prev;
-        }
-    }
-
-    Position::~Position() {
-        StateInfo *it = state;
-        while (it) {
-            StateInfo *prev = it->prev;
-            delete it;
-            it = prev;
-        }
-    }
+//    void Position::copy_into(Position *dst) const {
+//        memcpy(dst, this, sizeof(Position));
+//
+//        dst->state = state;
+//        // this is extremely cursed but i hope it works.
+//        StateInfo **toSet = &dst->state;
+//        while (*toSet) {
+//            StateInfo *orig = *toSet;
+//            *toSet = new StateInfo{};
+//            **toSet = *orig;
+//            toSet = &(*toSet)->prev;
+//        }
+//    }
+//
+//    Position::~Position() {
+//        StateInfo *it = state;
+//        while (it) {
+//            StateInfo *prev = it->prev;
+//            delete it;
+//            it = prev;
+//        }
+//    }
 }

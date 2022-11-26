@@ -86,7 +86,7 @@ namespace sc {
     extern template void standard_moves<WHITE_SIDE, true>(MoveList &, Position &);
 
     // DESIGN TODO: returning a StateInfo * is no longer necessary because of the prev field in StateInfo
-    void make_move(Position &pos, const Move mov);
+    void make_move(Position &pos, const Move mov, StateInfo *retInfo);
     void unmake_move(Position &pos, const Move mov);
 
     template <bool QUIESC>

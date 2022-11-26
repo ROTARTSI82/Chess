@@ -17,9 +17,9 @@ namespace sc {
         const bool leaf_coneybear = (depth == 2);
 
         for (const auto &m : legals) {
-
+            StateInfo undo;
             if (!ROOT || depth > 1) {
-                sc::make_move(pos, m);
+                sc::make_move(pos, m, &undo);
                 if (leaf_coneybear)
                     ret += (res = legal_moves_from<false>(pos).size());
                 else
@@ -46,6 +46,7 @@ namespace sc {
         COUT << "info string Magic generation took ";
         COUT << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms\n";
 
+        uci->stateHead = uci->states;
         uci->pos.set_state_from_fen(STARTING_POS_FEN);
         uci->eng.set_pos(&uci->pos);
         // uci->eng.start_search();
@@ -89,10 +90,12 @@ namespace sc {
         std::string tok;
         stream >> tok;
         if (tok == "startpos") {
+            stateHead = states;
             pos.set_state_from_fen(STARTING_POS_FEN);
         } else if (tok == "fen") {
             int offset;
             cmd = cmd.substr(stream.tellg());
+            stateHead = states;
             pos.set_state_from_fen(cmd, &offset);
             stream.clear();
             stream.str(cmd.substr(offset));
@@ -122,12 +125,12 @@ namespace sc {
                 if ((pos.by_type(KING) & to_bitboard(mov.src)) && std::abs(mov.dst - mov.src) == 2)
                     mov.typeFlags = CASTLE;
 
-                if (pos.get_state()->enPassantTarget == mov.dst)
+                if (pos.get_state().enPassantTarget == mov.dst)
                     mov.typeFlags = EN_PASSANT;
                 else
-                    sc::make_move(pos, mov);
+                    sc::make_move(pos, mov, stateHead++);
 
-                if (pos.get_state()->reps > 0) {
+                if (pos.get_state().reps > 0) {
                     std::cout << "REPETITION DETECTED\n";
                 }
             }
@@ -185,7 +188,7 @@ namespace sc {
             dbg_dump_position(pos);
         } else if (line == "c") {
             // dumps the hash chain
-            const StateInfo *it = pos.get_state();
+            const StateInfo *it = &pos.get_state();
             while (it != nullptr) {
                 std::cout << it->hash << '\t';
                 it = it->prev;

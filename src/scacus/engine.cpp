@@ -12,14 +12,13 @@ namespace {
 
     struct Transposition {
         uint64_t hash = 0;
+        long strength = 0;
         sc::ScoreT score = 0;
-        sc::DepthT depth = 0;
-//        sc::Move bestMove{};
-        bool isQuiesc = true; // if false, it's a quiesc search
+        sc::Move bestMove{};
     };
 
-    constexpr auto TABLE_SIZE = 4096 * 4096;
-    Transposition transTable[TABLE_SIZE] = {{}};
+    constexpr auto TABLE_SIZE = static_cast<size_t>(12e9 / sizeof(Transposition));
+    Transposition *transTable = nullptr;
 
     std::mutex ttMtx;
 }
@@ -56,7 +55,7 @@ namespace sc {
 
     public:
 
-        inline uint64_t getTTHits() const {
+        [[nodiscard]] inline uint64_t getTTHits() const {
             return ttHits;
         }
 
@@ -79,28 +78,33 @@ namespace sc {
             else
                 standard_moves<WHITE_SIDE, false>(opp, *pos);
 
-            return eval_material(*pos) + (ls.size() - opp.size()) * MOBILITY_VALUE;
+            return eval_material(*pos) + static_cast<ScoreT>(ls.size() - opp.size()) * MOBILITY_VALUE;
         }
 
         #define USE_TT 1
 
         template <bool QUIESC>
         ScoreT search(ScoreT alpha, ScoreT beta, DepthT depth) {
+            Move best{};
 
             Transposition *tt;
             if (USE_TT) {
                 std::lock_guard<std::mutex> lg(ttMtx);
-                tt = &transTable[pos->get_state()->hash % TABLE_SIZE];
+                tt = &transTable[pos->get_state().hash % TABLE_SIZE];
                 // // either the tt is in a higher mode OR (higher depth and same mode)
-                if (tt->hash == pos->get_state()->hash && tt_strength(depth, QUIESC) <= tt_strength(tt->depth, tt->isQuiesc)) {
+                if (tt->hash == pos->get_state().hash) {
                     ttHits++;
-                    return tt->score;
+                    if (tt_strength(depth, QUIESC) <= tt->strength)
+                        return tt->score;
+                    best = tt->bestMove;
                 }
             }
-            
-            MoveList ls = legal_moves_from<QUIESC>(*pos);
 
-            const bool canForceDraw = pos->get_state()->halfmoves >= 50 || pos->get_state()->reps;
+            MoveList ls = legal_moves_from<QUIESC>(*pos);
+            if (!QUIESC && depth > 2)
+                order_moves(ls, best);
+
+            const bool canForceDraw = pos->get_state().halfmoves >= 50 || pos->get_state().reps;
 
             if (QUIESC) {
                 ScoreT ev = canForceDraw ? 0 : eval(depth);
@@ -120,12 +124,20 @@ namespace sc {
 
             ScoreT value = MIN_SCORE;
             for (const auto &mov: ls) {
-                make_move(*pos, mov);
+                StateInfo undo;
+                make_move(*pos, mov, &undo);
 
+                ScoreT score;
                 if (QUIESC || depth <= QUIESC_DEPTH + 1)
-                    value = std::max(-search<true>(-beta, -alpha, depth - 1), value);
+                    score = -search<true>(-beta, -alpha, depth - 1);
                 else
-                    value = std::max(-search<false>(-beta, -alpha, depth - 1), value);
+                    score = -search<false>(-beta, -alpha, depth - 1);
+
+                if (score > value) {
+                    value = score;
+                    best = mov;
+                }
+
                 alpha = std::max(value, alpha);
 
                 unmake_move(*pos, mov);
@@ -139,23 +151,36 @@ namespace sc {
                 std::lock_guard<std::mutex> lg(ttMtx);
 
                 // either we are in a higher mode OR we have higher depth in the same mode
-                if (tt->hash != pos->get_state()->hash || tt_strength(depth, QUIESC) >= tt_strength(tt->depth, tt->isQuiesc)) {
-                    tt->hash = 0;
-                    tt->depth = depth;
-                    tt->isQuiesc = QUIESC;
+                if (tt->hash != pos->get_state().hash || tt_strength(depth, QUIESC) >= tt->strength) {
+                    tt->strength = tt_strength(depth, QUIESC);
                     tt->score = value;
-                    tt->hash = pos->get_state()->hash;
+                    tt->hash = pos->get_state().hash;
+                    tt->bestMove = best;
                 }
             }
 
             return QUIESC ? alpha : value; // or QUIESC ? alpha : value;
         }
+
+        inline void order_moves(MoveList &ls, Move best) {
+            for (auto &m : ls) {
+                if (m == best)
+                    m.ranking = std::numeric_limits<int_fast16_t>::max();
+                else if (pos->piece_at(m.dst) != NULL_COLORED_TYPE || m.typeFlags == EN_PASSANT) {
+                    // adding | 8 makes the black and white pieces the same.
+                    m.ranking = 4096 + pos->piece_at(m.dst | 8) - pos->piece_at(m.src | 8);
+                } else if (m.typeFlags == PROMOTION) {
+                    m.ranking = std::numeric_limits<int_fast16_t>::max() - 2 - m.promote;
+                }
+            }
+
+            std::sort(ls.begin(), ls.end());
+        }
     };
 
 
     void workerFunc(EngineV2 *eng) {
-        Position cpos;
-        eng->pos->copy_into(&cpos);
+        Position cpos = *eng->pos;
 
         while (eng->is_running()) {
             SearchTask task;
@@ -171,7 +196,8 @@ namespace sc {
 
             SearchThread me{&cpos, static_cast<DepthT>(task.depth), eng};
 
-            make_move(cpos, task.mov);
+            StateInfo undo;
+            make_move(cpos, task.mov, &undo);
             const ScoreT score = -me.search<false>(MIN_SCORE, MAX_SCORE, task.depth - 1);
 
             std::cout << "info string mov " << task.mov.long_alg_notation() << " score " 
@@ -219,6 +245,9 @@ namespace sc {
     }
 
     void EngineV2::start_search(int maxDepth) {
+        if (transTable == nullptr)
+            transTable = new Transposition[TABLE_SIZE];
+
         MoveList ls = legal_moves_from<false>(*pos);
 
         while (!tasks.empty())

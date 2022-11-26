@@ -185,6 +185,10 @@ namespace sc {
         // note: this doesn't append stuff for check and mate. manually do that by querying it after
         // calling make_move()
         [[nodiscard]] std::string standard_alg_notation(const Position &pos) const;
+
+        bool operator<(const Move &rhs) const {
+            return ranking < rhs.ranking;
+        }
     };
 
     // info about a position that we would like to store separately for move undo
@@ -211,10 +215,10 @@ namespace sc {
         Position() : Position(std::string{STARTING_POS_FEN}) {};
         [[nodiscard]] std::string get_fen() const;
 
-        ~Position();
+//        ~Position();
 
-        Position(const Position &) = delete;
-        Position &operator=(const Position &) = delete;
+        Position(const Position &) = default;
+        Position &operator=(const Position &) = default;
 
         // store: Used to store the index into the string that we read to
         void set_state_from_fen(const std::string &fen, int *store = nullptr);
@@ -223,11 +227,11 @@ namespace sc {
             pieces[p] = new_ColoredType(type, side);
             byType[type] |= to_bitboard(p);
             byColor[side] |= to_bitboard(p);
-            state->hash ^= zob_Pieces[p][pieces[p]];
+            state.hash ^= zob_Pieces[p][pieces[p]];
         }
 
         inline void clear(const Square p) {
-            state->hash ^= zob_Pieces[p][pieces[p]];
+            state.hash ^= zob_Pieces[p][pieces[p]];
             byType[type_of(pieces[p])] &= ~to_bitboard(p); 
             byColor[side_of(pieces[p])] &= ~to_bitboard(p);
             pieces[p] = NULL_COLORED_TYPE;
@@ -236,13 +240,13 @@ namespace sc {
         [[nodiscard]] constexpr inline Bitboard by_side(const Side c) const { return byColor[c]; }
         [[nodiscard]] constexpr inline Bitboard by_type(const Type t) const { return byType[t]; }
 
-        [[nodiscard]] constexpr inline const StateInfo *get_state() const { return state; }
-        [[nodiscard]] constexpr inline ColoredType piece_at(const int ind) const { return pieces[ind]; }
+        [[nodiscard]] constexpr inline const StateInfo &get_state() const { return state; }
+        [[nodiscard]] constexpr inline ColoredType piece_at(const Square ind) const { return pieces[ind]; }
         [[nodiscard]] constexpr inline bool in_check() const { return isInCheck; }
         [[nodiscard]] constexpr Side get_turn() const { return turn; }
 
         // copy this position into another memory location. Deep copies.
-        void copy_into(Position *dst) const;
+//        void copy_into(Position *dst) const;
 
     private:
         ColoredType pieces[BOARD_SIZE];
@@ -251,14 +255,14 @@ namespace sc {
 
 //        std::unordered_map<uint64_t, int8_t> threefoldTable;
 
-        StateInfo *state = nullptr;
+        StateInfo state{};
         int fullmoves = 1; // increment every time black moves
         Side turn = WHITE_SIDE;
 
         // TODO: Currently this flag is reset back to false by any unmake_move() so.... it really should be a part of the state info
         bool isInCheck = false; // this flag is set by standard_moves() if it detects that the side it generated moves for is in check.
 
-        friend void make_move(Position &pos, const Move mov);
+        friend void make_move(Position &pos, const Move mov, StateInfo *);
         friend void unmake_move(Position &pos, const Move mov);
         friend struct ::sc::makeimpl::PositionFriend;
 

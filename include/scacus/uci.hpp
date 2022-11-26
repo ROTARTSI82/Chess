@@ -41,6 +41,8 @@ namespace sc {
 //        }
     
     private:
+        StateInfo states[256];
+        StateInfo *stateHead = states;
 
         void position(const std::string &cmd);
 
